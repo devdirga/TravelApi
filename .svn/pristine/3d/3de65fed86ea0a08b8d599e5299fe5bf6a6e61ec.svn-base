@@ -1,0 +1,20 @@
+<?php
+
+namespace Fastravel\App;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Parser\App\GlobalPaymentResponseParser;
+use Fastravel\Libraries\Message\AppMessage;
+
+class GlobalPaymentController extends APIController {
+
+    protected $invoking = "Global Payment App";
+
+    public function indexAction() {
+        
+        $message = new AppMessage($this);
+        
+        GlobalPaymentResponseParser::instance()->parse($message)->into($this);
+        
+    }
+    
+}

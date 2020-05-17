@@ -1,0 +1,21 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\AccountResponseParser;
+
+class AccountController extends APIController
+{
+    protected $invoking = "Account App";
+    
+    public function indexAction()
+    {
+        $message = new AppMessage($this);
+        
+        $this->sendToCore($message);
+        
+        AccountResponseParser::instance()->parse($message)->into($this);
+    }
+}

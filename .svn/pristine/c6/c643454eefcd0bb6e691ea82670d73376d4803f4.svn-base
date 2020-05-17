@@ -1,0 +1,7 @@
+copy.src.files=true
+copy.src.on.open=false
+copy.src.target=/usr/share/nginx/fastravel.co.id/api
+include.path.private=
+index.file=
+run.as=LOCAL
+url=http://api.fastravel.co.id

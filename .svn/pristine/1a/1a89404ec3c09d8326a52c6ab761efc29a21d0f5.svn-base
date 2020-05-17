@@ -1,0 +1,21 @@
+<?php
+
+namespace Fastravel\Tour;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TourMessage;
+use Fastravel\Libraries\Parser\Tour\PaymentResponseParser;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Tour";
+    
+    public function indexAction()
+    {
+        $message = new TourMessage($this);
+        
+        $this->sendToCore($message);
+        
+        PaymentResponseParser::instance()->parse($message)->into($this);
+    }
+}

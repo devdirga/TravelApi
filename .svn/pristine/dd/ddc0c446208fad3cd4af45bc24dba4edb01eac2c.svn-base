@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\Flight;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\Parser\Flight\AirportResponseParser;
+
+class AirportController extends APIController
+{
+    protected $invoking = "Airport Flight";
+    
+    public function indexAction()
+    {
+        $message = new FlightMessage($this);
+        
+        AirportResponseParser::instance()->parse($message)->into($this);
+    }
+}

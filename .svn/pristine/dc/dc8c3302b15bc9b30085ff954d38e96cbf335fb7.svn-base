@@ -1,0 +1,151 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Wisata;
+
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\APIController;
+use Phalcon\Db;
+
+class SearchResponseParser extends BaseResponseParser implements ResponseParser {
+
+    /**
+     * TravelBus message response from core.
+     * 
+     * @var WisataMessage
+     */
+    protected $message;
+    protected $ambiguity = array('%yogya%', '%jogja%');
+    protected $keySearch1;
+    protected $keySearch2;
+    protected $up_harga;
+    protected $url_foto = "http://best.fastravel.co.id/";
+    protected $bb_url_foto = "https://static.scash.bz/jadipergi/img/wisata/";
+
+    public function into(APIController $apiController) {
+        
+        if (!in_array($apiController->request->keySearch, $this->ambiguity)) {
+            $this->ambiguity[0] = "%" . $apiController->request->keySearch . "%";
+            $this->ambiguity[1] = "%" . $apiController->request->keySearch . "%";
+        }
+
+        $this->up_harga = $apiController->db->query("select nilai from global_setting where kunci = 'setting_up_harga_paket_wisata_jadipergi'")->fetch()['nilai'];
+
+        $searchQuery = $apiController->db->query("select d.id_destinasi,mp.nama_propinsi, d.nama_destinasi, d.days, d.nights, '[' || array_to_string(array_agg(quote_literal(obj.nama_objek_wisata)),',') || ']' as obyek_wisata 
+            from paket_wisata_2_mt_destinasi d left join paket_wisata_2_objek_wisata obj on obj.id_destinasi = d.id_destinasi 
+            left join mt_propinsi mp on mp.id_propinsi = d.id_propinsi
+            where d.id_destinasi in (select id_destinasi from paket_wisata_2_mt_destinasi where id_propinsi in (
+                    select id_propinsi from mt_propinsi where lower(nama_propinsi) like lower(?) or lower(nama_propinsi) like lower(?))              
+                    union select id_destinasi from paket_wisata_2_mt_destinasi where lower(negara) like lower(?) or lower(negara) like lower(?)     
+                    union select id_destinasi from paket_wisata_2_mt_destinasi where lower(nama_destinasi) like lower(?) or lower(nama_destinasi) like lower(?)   
+                    union select id_destinasi from paket_wisata_2_objek_wisata where lower(nama_objek_wisata) like lower(?) or lower(nama_objek_wisata) like lower(?)    
+                    union select id_destinasi from paket_wisata_2_data_wilayah where lower(nama_wilayah) like lower(?) or lower(nama_wilayah) like lower(?)
+                    union select distinct id_destinasi from paket_wisata_2_data_tipe_wisata where id_tipe_wisata in ( select id_tipe_wisata from paket_wisata_2_mt_tipe_wisata where lower(nama_tipe_wisata) like lower(?) or lower(nama_tipe_wisata) like lower(?)   
+                    )
+            )
+            and ((d.id_destinasi in (select distinct id_destinasi from paket_wisata_2_harga_paket 
+                where extract(month from tanggal) = ? 
+                and extract(year from tanggal) = ?  
+                and tanggal > ? and status=1 )))
+                and d.is_verified_os=1 
+                and d.is_active=1 
+                and d.id_supplier in(select id_supplier from paket_wisata_2_mt_supplier where is_verified_by_os=1 
+                ) group by 1,2", [
+            $this->ambiguity[0], $this->ambiguity[1],
+            $this->ambiguity[0], $this->ambiguity[1],
+            $this->ambiguity[0], $this->ambiguity[1],
+            $this->ambiguity[0], $this->ambiguity[1],
+            $this->ambiguity[0], $this->ambiguity[1],
+            $this->ambiguity[0], $this->ambiguity[1],
+            $apiController->request->month,
+            $apiController->request->year,
+            date('Y-m-d')
+        ]);
+
+        $searchQuery->setFetchMode(Db::FETCH_OBJ);
+
+        $searches = $searchQuery->fetchAll();
+
+        $tmp = array();
+
+        $t = 0;
+
+        foreach ($searches as $value) {
+
+            $list_harga = $apiController->db->query("select custom_harga_1 + (custom_harga_1::float / 100::float * " . $this->up_harga . ")::int as custom_harga_1,
+                custom_harga_2 + (custom_harga_2::float / 100::float * " . $this->up_harga . ")::int as custom_harga_2,
+                custom_harga_3 + (custom_harga_3::float / 100::float * " . $this->up_harga . ")::int as custom_harga_3,
+                custom_harga_4 + (custom_harga_4::float / 100::float * " . $this->up_harga . ")::int as custom_harga_4,
+                custom_harga_5 + (custom_harga_5::float / 100::float * " . $this->up_harga . ")::int as custom_harga_5,
+                custom_harga_6 + (custom_harga_6::float / 100::float * " . $this->up_harga . ")::int as custom_harga_6,
+                custom_harga_7 + (custom_harga_7::float / 100::float * " . $this->up_harga . ")::int as custom_harga_7,
+                custom_harga_8 + (custom_harga_8::float / 100::float * " . $this->up_harga . ")::int as custom_harga_8,
+                custom_harga_9 + (custom_harga_9::float / 100::float * " . $this->up_harga . ")::int as custom_harga_9,
+                custom_harga_10 + (custom_harga_10::float / 100::float * " . $this->up_harga . ")::int as custom_harga_10
+                from paket_wisata_2_harga_paket  where extract(month from tanggal) = ? and extract(year from tanggal) = ?
+                and tanggal > '" . date('Y-m-d') . "' and status=1 and id_destinasi=?", [$apiController->request->month, $apiController->request->year, $value->id_destinasi])->fetchAll();
+
+            $harga = array();
+
+            foreach ($list_harga as $item_harga) 
+            {
+                foreach ($item_harga as $value2) 
+                {
+                    if (intval($value2) !== 0) 
+                    {
+                        array_push($harga, $value2);
+                    }
+                }
+            }
+
+            $hrg = min($harga);
+
+            $fotos = $apiController->db->query("select * from paket_wisata_2_foto_destinasi where id_destinasi=? order by urutan asc", [$value->id_destinasi])->fetchAll();
+
+            $list_foto = array();
+            
+            foreach ($fotos as $f) 
+            {
+                switch (intval($f['use_cdn'])) 
+                {
+                    case 1:
+                        //array_push($list_foto, $this->bb_url_foto . $f['path_foto']);
+                        $url_photo = $this->bb_url_foto . $f['path_foto'];
+                        break;
+                    case 0: 
+                        //array_push($list_foto, $this->url_foto . $f['path_foto']);
+                        $url_photo = $this->url_foto . $f['path_foto'];
+                        break;
+                    default:
+                        //array_push($list_foto, $this->url_foto . $f['path_foto']);
+                        $url_photo = $this->url_foto . $f['path_foto'];
+                        break;
+                }
+            }
+
+            $r = (object) array
+                        (
+                        "id_destinasi" => $value->id_destinasi,
+                        "nama_destinasi" => $value->nama_destinasi,
+                        "nama_propinsi" => $value->nama_propinsi,
+                        "days" => $value->days,
+                        "nights" => $value->nights,
+                        "harga" => $hrg,
+                        "foto" => $url_photo,
+                        "obyek_wisata" => json_decode(str_replace("'", "\"", str_replace("''","" , $value->obyek_wisata)))
+            );
+
+            $tmp[$t] = ($r);
+
+            $t++;
+        }
+
+        if (count($searches) > 0) {
+            $apiController->response->data = $tmp;
+        } else {
+            $apiController->response->setStatus("01", "Tour is not found.");
+        }
+    }
+
+}

@@ -1,0 +1,139 @@
+<?php
+
+namespace Travel\Pelni;
+
+use Travel\Libraries\APIController;
+use Travel\Libraries\Message\PelniMessage;
+use Travel\Libraries\Parser\Pelni\BookResponseParser;
+use Travel\Libraries\Utility;
+use Travel\Libraries\MTI;
+
+class BookController extends APIController
+{
+    protected $invoking = "Book Pelni";
+
+    public function indexAction()
+    {
+        $this->setMTI(MTI::TAGIHAN);
+        $this->setProductCode("SHPPELNI");
+
+        $message = new PelniMessage($this);
+
+        $message->set(PelniMessage::FIELD_OPERATION, 12);
+        $message->set(PelniMessage::FIELD_ORIGINATION, $this->request->origin);
+        $message->set(PelniMessage::FIELD_ORIGINATION_CALL, $this->request->originCall);
+        $message->set(PelniMessage::FIELD_DESTINATION, $this->request->destination);
+        $message->set(PelniMessage::FIELD_DESTINATION_CALL, $this->request->destinationCall);
+
+        $message->set(PelniMessage::FIELD_DEPARTURE_DATE, str_replace("-", "", $this->request->departureDate));
+        $message->set(PelniMessage::FIELD_SHIP_NUMBER, $this->request->shipNumber);
+
+        $message->set(PelniMessage::FIELD_SUB_CLASS, $this->request->subClass);
+        $message->set(PelniMessage::FIELD_MALE_PAX, $this->request->male);
+        $message->set(PelniMessage::FIELD_FEMALE_PAX, $this->request->female);
+
+        $message->set(PelniMessage::FIELD_PAX_ADULT_TOTAL, $this->request->adult);
+
+        if (isset($this->request->child)) {
+            $message->set(PelniMessage::FIELD_PAX_CHILD_TOTAL, $this->request->child);
+        } else {
+            $message->set(PelniMessage::FIELD_PAX_CHILD_TOTAL, 0);
+        }
+
+        $message->set(PelniMessage::FIELD_PAX_INFANT_TOTAL, $this->request->infant);
+
+        $passengers = $this->request->passengers;
+
+        $adultNames = array();
+        $adultBirthDates = array();
+        $adultGenders = array();
+        $adultIdentities = array();
+
+        foreach ($passengers->adults as $adult) {
+            $adultNames[] = $adult->name;
+            $adultBirthDates[] = str_replace("-", "", $adult->birthDate);
+            $adultGenders[] = $adult->gender;
+            $adultIdentities[] = $adult->identityNumber;
+        }
+
+        $message->set(PelniMessage::FIELD_ADULT_NAME, implode("|", $adultNames));
+        $message->set(PelniMessage::FIELD_ADULT_IDENTITY_NUMBER, implode("|", $adultIdentities));
+        $message->set(PelniMessage::FIELD_ADULT_GENDER, implode("|", $adultGenders));
+        $message->set(PelniMessage::FIELD_ADULT_BIRTH_DATE, implode("|", $adultBirthDates));
+
+        if (isset($passengers->children)) {
+            $childNames = array();
+            $childBirthDates = array();
+            $childGenders = array();
+
+            foreach ($passengers->children as $child) {
+                $childNames[] = $child->name;
+                $childBirthDates[] = str_replace("-", "", $child->birthDate);
+                $childGenders[] = $child->gender;
+            }
+
+            $message->set(PelniMessage::FIELD_CHILD_NAME, implode("|", $childNames));
+            $message->set(PelniMessage::FIELD_CHILD_GENDER, implode("|", $childGenders));
+            $message->set(PelniMessage::FIELD_CHILD_BIRTH_DATE, implode("|", $childBirthDates));
+        }
+
+        if (isset($passengers->infants)) {
+            $infantNames = array();
+            $infantBirthDates = array();
+            $infantGenders = array();
+
+            foreach ($passengers->infants as $infant) {
+                $infantNames[] = $infant->name;
+                $infantBirthDates[] = str_replace("-", "", $infant->birthDate);
+                $infantGenders[] = $infant->gender;
+            }
+
+            $message->set(PelniMessage::FIELD_INFANT_NAME, implode("|", $infantNames));
+            $message->set(PelniMessage::FIELD_INFANT_GENDER, implode("|", $infantGenders));
+            $message->set(PelniMessage::FIELD_INFANT_BIRTH_DATE, implode("|", $infantBirthDates));
+        }
+
+        $message->set(PelniMessage::FIELD_EMAIL, $this->request->contact->email);
+        $message->set(PelniMessage::FIELD_PASSENGER_PHONE_NUMBER, Utility::filterPhoneNumber($this->request->contact->phone));
+        $message->set(PelniMessage::FIELD_PASSENGER_FAMILY, $this->request->isFamily);
+
+        //$this->request->class
+        //$this->request->shipName
+        //$this->request->pelabuhan_asal
+        //$this->request->pelabuhan_tujuan
+        //$this->request->harga_dewasa
+        //$this->request->harga_anak
+        //$this->request->harga_intant
+        $additional_info = array(
+            "data_harga_dewasa" => $this->request->harga_dewasa,
+            "data_harga_anak" => $this->request->harga_anak,
+            "data_harga_infant" => $this->request->harga_infant,
+            "data_pelabuhan_asal" => $this->request->pelabuhan_asal,
+            "data_pelabuhan_tujuan" => $this->request->pelabuhan_tujuan,
+            "data_ship_name" => $this->request->shipName,
+            "data_ship_number" => $this->request->shipNumber,
+            "data_ship_subclass" => $this->request->subClass,
+            "data_ship_class" => $this->request->class
+        );
+        $message->set(PelniMessage::FIELD_ADDITIONAL_INFO, json_encode($additional_info));
+
+
+        /* Handle Child Passenger */
+
+        $filter = true;
+
+        if (isset($this->request->child)) {
+            $filter = (intval($this->request->child) > 0) ? true : false;
+        } else {
+            $filter = false;
+        }
+
+        if ($filter) {
+            $this->response->setStatus('02', 'Usia lebih dari 2 tahun maka dianggap sebagai penumpang dewasa');
+        } else {
+            $this->sendToCore($message);
+
+            BookResponseParser::instance()->parse($message)->into($this);
+        }
+    }
+}

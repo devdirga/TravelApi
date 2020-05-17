@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\Hotel;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\Parser\Hotel\DestinationResponseParser;
+
+class DestinationController extends APIController
+{
+    protected $invoking = "Destination Hotel";
+    
+    public function indexAction()
+    {
+        $message = new HotelMessage($this);
+        
+        DestinationResponseParser::instance()->parse($message)->into($this);
+    }
+}

@@ -1,0 +1,61 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Hotel;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\APIController;
+
+class NearbyResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Hotel Message.
+     * 
+     * @var HotelMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $hotels = $apiController->db->query("SELECT 
+            id_hotel, 
+            id_biller, 
+            bintang, 
+            nama_hotel,
+            alamat,
+            alamat_2,
+            cast (6371 * acos(cos(radians(?)) * cos(radians(cast(kordinat_lat as numeric))) * cos(radians(cast(kordinat_long as numeric)) - radians(?)) + sin(radians(?)) * sin(radians(cast(kordinat_lat as numeric)))) as decimal(10,2)) AS distance 
+            FROM 
+            hotel_data_detail_3 
+            ORDER BY distance asc, bintang desc LIMIT ?", 
+            [
+                $apiController->request->latitude, 
+                $apiController->request->longitude, 
+                $apiController->request->latitude,
+                $apiController->request->count
+            ])->fetchAll();
+
+        if(count($hotels) > 0)
+        {
+            foreach($hotels AS $hotel)
+            {
+                $object = new \stdClass();
+
+                $object->id_hotel = $hotel["id_hotel"];
+                $object->id_biller = $hotel["id_biller"];
+                $object->rating = $hotel["bintang"];
+                $object->nama_hotel = $hotel["nama_hotel"];
+                $object->alamat = $hotel["alamat"];
+                $object->alamat_2 = $hotel["alamat_2"];
+                $object->distance = $hotel["distance"];
+
+                $apiController->response->data[] = $object;
+            }
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "There is no nearby hotel.");
+        }
+    }
+}

@@ -1,0 +1,427 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Flight;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+use Phalcon\Db;
+
+class SearchResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Flight Message.
+     * 
+     * @var FlightMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(FlightMessage::FIELD_STATUS);
+        $rd = $this->message->get(FlightMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            if(trim($this->message->get(FlightMessage::FIELD_MESSAGE)) != "")
+            {
+                if(strpos(trim($this->message->get(FlightMessage::FIELD_MESSAGE), "|#"), "|#"))
+                {
+                    $schedules = explode("|#", trim($this->message->get(FlightMessage::FIELD_MESSAGE), "|#"));
+                }
+                else
+                {
+                    $schedules = explode("#", trim($this->message->get(FlightMessage::FIELD_MESSAGE), "#"));
+                }
+                
+                $this->handleIteration($apiController, $schedules);
+            }
+        }
+        
+        $apiController->response->mid = intval($this->message->get(FlightMessage::FIELD_MID));
+        $apiController->response->setStatus($rc, $rd);
+    }
+    
+    private function handleIteration(APIController $apiController, $schedules)
+    {
+        $i = 0;
+        foreach($schedules as $schedule)
+        {
+            if(!strpos($schedule, "XX"))
+            {
+                $apiController->response->data[$i] = new \stdClass();
+                $apiController->response->data[$i]->classes = array();
+                                
+                if(strpos($schedule, "::"))
+                {
+                    $this->iterateTransit($apiController, $schedule, $i);
+                }
+                else
+                {
+                    $items = explode("|", $schedule);
+
+                    $apiController->response->data[$i] = new \stdClass();
+
+                    $apiController->response->data[$i]->classes = array();
+
+                    $this->iterate(0, $items, $apiController, $apiController->response->data[$i], true);
+                }
+
+                $apiController->response->data[$i]->departureDate = $apiController->request->departureDate;
+                $apiController->response->data[$i]->arrivalDate = Utility::getArrivalDate($apiController->response->data[$i]->classes, $apiController->request->departureDate);
+                $apiController->response->data[$i]->duration = Utility::getDuration($apiController->response->data[$i]->classes, $apiController->request->departureDate);
+
+                $airline = Utility::getAirline($apiController);
+
+                $apiController->response->data[$i]->airlineIcon = $airline->url_icon;
+                $apiController->response->data[$i]->airlineName = str_replace(" INDONESIA", "", $airline->nama_maskapai);
+                $apiController->response->data[$i]->airlineCode = $apiController->request->airline;
+            
+                $i++;
+            }
+        }
+    }
+    
+    private function iterateTransit($apiController, $schedule, $iteration)
+    {
+        $i = 0;
+        $exploded = explode("::", $schedule);
+
+        $apiController->response->data[$iteration]->isTransit = true;
+        
+        foreach($exploded as $explode)
+        {
+            $explodeValue = trim($explode, "|");
+
+            $items = explode("|", $explodeValue);
+
+            $this->iterate($i, $items, $apiController, $apiController->response->data[$iteration], $i == 0 ? true : false);
+
+            $i++;
+        }
+    }
+    
+    private function iterate($flightNumber, $items, APIController $apiController, $schedule, $isFirstFlight = true)
+    {
+        $schedule->classes[$flightNumber] = array();
+        
+        $airports = Utility::getAirports($apiController);
+        
+        $i = 0;
+        foreach($items as $item)
+        {
+            if($i == 0 && $isFirstFlight)
+            {
+                $schedule->title = Utility::sanitizeFlightTitle($item);
+                $schedule->isTransit = strpos($item, ">") ? true : false;
+            }
+            else
+            {
+                if(isset($apiController->request->isLowestPrice) && $apiController->request->isLowestPrice == true && $i == 2)
+                {
+                    break;
+                }
+                
+                $exploded = explode(";", $item);
+                
+                $object = new \stdClass();
+
+                
+                $airportDeparture = Utility::getAirportDetail($exploded[11], $airports);
+                $airportArrival = Utility::getAirportDetail($exploded[12], $airports);
+                
+                $timeArrival = $exploded[4] == "" ? $exploded[9] : $exploded[4];
+                
+                if(in_array($apiController->request->airline, ["TPGA"]))
+                {
+                    $timeArrival = $exploded[9];
+                }
+                
+                $object->availability = intval($exploded[0]);
+                $object->seatKey = $exploded[1];
+                $object->class = $exploded[2];
+                $object->price = intval($exploded[3]);
+                $object->depatureTime = $exploded[8];
+                $object->arrivalTime = $timeArrival;
+                $object->flightCode = $exploded[10];
+                $object->departure = $exploded[11];
+                $object->departureName = explode(" (", $airportDeparture->city_name)[0];
+                $object->arrival = $exploded[12];
+                $object->arrivalName = explode(" (", $airportArrival->city_name)[0];
+                $object->isInternational = $this->is_international($object->departure, $object->arrival);
+                $object->departureTimeZone = $airportDeparture->timezone;
+                $object->arrivalTimeZone = $airportArrival->timezone;
+                $object->departureTimeZoneText = Utility::getTimeZoneRepresentation($airportDeparture->timezone);
+                $object->arrivalTimeZoneText = Utility::getTimeZoneRepresentation($airportArrival->timezone);
+                $object->seat = $item;
+                
+                //$schedule->classes[$flightNumber][] = $object;
+                if($this->isShow($apiController->request->departureDate, $exploded[8])){
+                    $schedule->classes[$flightNumber][] = $object;
+                }
+            }
+
+            $i++;
+        }
+    }
+    
+    private function is_international ($depature_city_code,$arrival_city_code)
+    {
+        $internationals = array(
+            "ADL",
+            "AKL",
+            "AMD",
+            "AMS",
+            "AOR",
+            "ARN",
+            "ATH",
+            "ATQ",
+            "AUH",
+            "AVV",
+            "AYQ",
+            "BAH",
+            "BCN",
+            "BKI",
+            "BKK",
+            "BLR",
+            "BMW",
+            "BNE",
+            "BNK",
+            "BOM",
+            "BRU",
+            "BTU",
+            "BWN",
+            "CAI",
+            "CAN",
+            "CBR",
+            "CCU",
+            "CDG",
+            "CEB",
+            "CEI",
+            "CGP",
+            "CGY",
+            "CHC",
+            "CKG",
+            "CMB",
+            "CNS",
+            "CNX",
+            "COK",
+            "CPH",
+            "CRK",
+            "CSX",
+            "CTS",
+            "CTU",
+            "CXR",
+            "DAC",
+            "DAD",
+            "DEL",
+            "DIL",
+            "DLI",
+            "DME",
+            "DMK",
+            "DRW",
+            "DUB",
+            "DUD",
+            "DUS",
+            "DVO",
+            "DXB",
+            "DYG",
+            "FCO",
+            "FRA",
+            "FUK",
+            "GAU",
+            "GOI",
+            "HAK",
+            "HAN",
+            "HBA",
+            "HDY",
+            "HGH",
+            "HHQ",
+            "HIS",
+            "HKG",
+            "HKT",
+            "HND",
+            "HNL",
+            "HPH",
+            "HTI",
+            "HUI",
+            "HYD",
+            "ICN",
+            "IMF",
+            "IPH",
+            "IST",
+            "ITM",
+            "JAI",
+            "JED",
+            "JFK",
+            "JHB",
+            "JJN",
+            "KBR",
+            "KBV",
+            "KCH",
+            "KHH",
+            "KHN",
+            "KIX",
+            "KKC",
+            "KLO",
+            "KMG",
+            "KMJ",
+            "KMQ",
+            "KOJ",
+            "KOP",
+            "KTE",
+            "KTM",
+            "KUA",
+            "KUL",
+            "KWE",
+            "KWL",
+            "LAX",
+            "LBU",
+            "LGK",
+            "LGW",
+            "LHR",
+            "LJG",
+            "LKO",
+            "LOE",
+            "LPT",
+            "LST",
+            "MAA",
+            "MAD",
+            "MAN",
+            "MCT",
+            "MCY",
+            "MDL",
+            "MEL",
+            "MFM",
+            "MKY",
+            "MKZ",
+            "MLE",
+            "MNL",
+            "MUC",
+            "MXP",
+            "MYJ",
+            "MYY",
+            "NAN",
+            "NAW",
+            "NBO",
+            "NGB",
+            "NGO",
+            "NKG",
+            "NKM",
+            "NNG",
+            "NNT",
+            "NPE",
+            "NPL",
+            "NRT",
+            "NSN",
+            "NST",
+            "NTL",
+            "NYT",
+            "OIT",
+            "OKA",
+            "OOL",
+            "ORD",
+            "ORY",
+            "OSL",
+            "PEK",
+            "PEN",
+            "PER",
+            "PHS",
+            "PMR",
+            "PNH",
+            "PNQ",
+            "PPP",
+            "PPS",
+            "PQC",
+            "PUS",
+            "PVG",
+            "PXU",
+            "RAR",
+            "REP",
+            "RGN",
+            "ROI",
+            "SBW",
+            "SDJ",
+            "SDK",
+            "SEA",
+            "SFO",
+            "SGN",
+            "SHE",
+            "SIN",
+            "SLL",
+            "SNO",
+            "SVO",
+            "SWA",
+            "SYD",
+            "SZB",
+            "SZX",
+            "TAC",
+            "TAG",
+            "TAK",
+            "TAO",
+            "TBB",
+            "TGG",
+            "THD",
+            "TNA",
+            "TPE",
+            "TRV",
+            "TRZ",
+            "TSN",
+            "TST",
+            "TSV",
+            "TWU",
+            "TXL",
+            "UBP",
+            "UIH",
+            "URT",
+            "USM",
+            "UTH",
+            "UTP",
+            "VCE",
+            "VCL",
+            "VDH",
+            "VII",
+            "VTE",
+            "VTZ",
+            "WLG",
+            "WUH",
+            "WUX",
+            "XIY",
+            "XMN",
+            "ZQN"
+        );
+		
+        $is_international = 0;
+//        $q_destination = $apiController->db->query("select is_international from mt_destination where city_code= ?", [$depature_city_code]);        
+//        $q_destination->setFetchMode(Db::FETCH_OBJ);
+//        $data = $q_destination->fetch();
+        
+//        $q_destination2 = $apiController->db->query("select is_international from mt_destination where city_code= ?", [$arrival_city_code]);
+//        $q_destination2->setFetchMode(Db::FETCH_OBJ);
+//        $data2 = $q_destination2->fetch();
+        
+        if (in_array($depature_city_code, $internationals) || in_array($arrival_city_code, $internationals)){
+            $is_international = 1;
+        }
+        return $is_international;
+    }
+    
+    private function isShow($depDate,$depTime){
+        
+        $setting = 0;
+        $tgl_berangkat_param_data = date("d-m-Y", strtotime($depDate)) . ' ' . $depTime .":00";
+        $tgl_berangkat_param = date('Y-m-d H.i.s', strtotime($tgl_berangkat_param_data));
+        $tgl_sekarang_param = date('Y-m-d H.i.s');
+        $start = strtotime($tgl_berangkat_param);
+        $end = strtotime($tgl_sekarang_param);
+        $selisih_jam = ceil((($start - $end) / 86400) * 24);
+        if(intval($selisih_jam) > intval($setting)){
+            return true;
+        }else{
+            return false;
+        }
+        
+    }
+}

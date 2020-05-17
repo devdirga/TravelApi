@@ -1,0 +1,48 @@
+<?php
+
+namespace Travel\Train;
+
+use Travel\Libraries\APIController;
+use Travel\Libraries\Message\TrainMessage;
+use Travel\Libraries\Parser\Train\FareResponseParser;
+use Travel\Libraries\MTI;
+
+class FareController extends APIController
+{
+    protected $invoking = "Fare Train";
+
+    public function indexAction()
+    {
+        $this->setMTI(MTI::NKAIAVB);
+        $this->setProductCode($this->request->productCode);
+
+        $message = new TrainMessage($this);
+
+        $date = str_replace("-", "", $this->request->date);
+
+        $message->set(TrainMessage::FIELD_ORG, $this->request->origin);
+        $message->set(TrainMessage::FIELD_DES, $this->request->destination);
+        $message->set(TrainMessage::FIELD_DEP_DATE, $date);
+        $message->set(TrainMessage::FIELD_ARV_DATE, $date);
+
+        $message->set(TrainMessage::FIELD_TRAIN_NO, $this->request->trainNumber);
+        $message->set(TrainMessage::FIELD_CLASS, $this->request->grade);
+        $message->set(TrainMessage::FIELD_SUBCLASS, $this->request->class);
+
+        $message->set(TrainMessage::FIELD_NUM_PAX_ADULT, $this->request->adult);
+        $message->set(TrainMessage::FIELD_NUM_PAX_CHILD, $this->request->child);
+        $message->set(TrainMessage::FIELD_NUM_PAX_INFANT, $this->request->infant);
+
+        $message->set(TrainMessage::FIELD_ROUTE, $this->request->origin . "-" . $this->request->destination);
+        $message->set(TrainMessage::FIELD_PAX_NUM, $this->request->adult + $this->request->child + $this->request->infant);
+        $message->set(TrainMessage::FIELD_TRAIN_NAME, $this->request->trainName);
+        $message->set(TrainMessage::FIELD_ORIGINATION, $this->request->departureStation);
+        $message->set(TrainMessage::FIELD_DEP_TIME, $this->request->departureTime);
+        $message->set(TrainMessage::FIELD_DESTINATION, $this->request->arrivalStation);
+        $message->set(TrainMessage::FIELD_ARV_TIME, $this->request->arrivalTime);
+
+        $this->sendToCore($message);
+
+        FareResponseParser::instance()->parse($message)->into($this);
+    }
+}

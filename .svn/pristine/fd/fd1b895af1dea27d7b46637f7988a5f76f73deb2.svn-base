@@ -1,0 +1,23 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\TravelBus;
+
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\TravelBusMessage;
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\APIController;
+
+class ChooseSeatResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * TravelBus message response from core.
+     * 
+     * @var TravelBusMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        
+    }
+}

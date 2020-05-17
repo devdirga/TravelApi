@@ -1,0 +1,29 @@
+<?php
+
+namespace Fastravel\Flight;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\Parser\Flight\ConfigurationResponseParser;
+use Fastravel\Libraries\MTI;
+
+class ConfigurationController extends APIController
+{
+    protected $invoking = "Configuration Flight";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::RESERVATION);
+        $this->setProductCode("AIRPORT");
+        
+        $message = new FlightMessage($this);
+        
+        $message->set(FlightMessage::FIELD_FLIGHT_STEP, "AIRPORT");
+        $message->set(FlightMessage::FIELD_PROCESS, "01");
+        $message->set(FlightMessage::FIELD_VIA, "WEB");
+        
+        $this->sendToCore($message);
+        
+        ConfigurationResponseParser::instance()->parse($message)->into($this);
+    }
+}

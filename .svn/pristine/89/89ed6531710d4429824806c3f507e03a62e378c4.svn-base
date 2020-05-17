@@ -1,0 +1,41 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Flight;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\APIController;
+
+class TicketStatusResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Flight Message.
+     * 
+     * @var FlightMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(FlightMessage::FIELD_STATUS);
+        $rd = $this->message->get(FlightMessage::FIELD_KETERANGAN);
+        
+        $message = trim($this->message->get(FlightMessage::FIELD_MESSAGE));
+        
+        if($rc == "00" && $message != "")
+        {
+            $transactions = explode("|", $message);
+            
+            foreach($transactions as $transaction)
+            {
+                if(trim($transaction) != "")
+                {
+                    $apiController->response->data[] = $transaction;
+                }
+            }
+        }
+        
+        $apiController->response->setStatus($rc, $rd);
+    }
+}

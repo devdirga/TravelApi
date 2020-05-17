@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\SlidesResponseParser;
+
+class SlidesController extends APIController
+{
+    protected $invoking = "Slides App";
+    
+    public function indexAction()
+    {
+        $message = new AppMessage($this);
+        
+        SlidesResponseParser::instance()->parse($message)->into($this);
+    }
+}

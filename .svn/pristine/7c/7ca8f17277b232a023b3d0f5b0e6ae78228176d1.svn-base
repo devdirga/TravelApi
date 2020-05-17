@@ -1,0 +1,43 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Train;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\APIController;
+
+class BookResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Train message response from core.
+     * 
+     * @var TrainMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(TrainMessage::FIELD_STATUS);
+        $rd = $this->message->get(TrainMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            $apiController->response->setDataAsObject();
+            
+            $apiController->response->data->bookingCode = $this->message->get(TrainMessage::FIELD_BOOK_CODE);
+            $apiController->response->data->transactionId = $this->message->get(TrainMessage::FIELD_TRX_ID);
+            $apiController->response->data->passengers = json_decode($this->message->get(TrainMessage::FIELD_PAX));
+            $apiController->response->data->seats = json_decode($this->message->get(TrainMessage::FIELD_SEAT));
+            $apiController->response->data->komisi = Utility::getKomisi($apiController,$this->message->get(TrainMessage::FIELD_TRX_ID));
+            $apiController->response->data->normalSales = $this->message->get(TrainMessage::FIELD_NORMAL_SALES);
+            $apiController->response->data->extraFee = $this->message->get(TrainMessage::FIELD_EXTRA_FEE);
+            $apiController->response->data->nominalAdmin = $this->message->get(TrainMessage::FIELD_NOMINAL_ADMIN);
+            $apiController->response->data->bookBalance = $this->message->get(TrainMessage::FIELD_BOOK_BALANCE);
+            $apiController->response->data->discount = $this->message->get(TrainMessage::FIELD_SEAT_MAP_NULL);
+        }
+        
+        $apiController->response->setStatus($rc == "0" ? "00" : $rc, $rc == "00" ? "Success" : $rd);
+    }
+}

@@ -1,0 +1,176 @@
+<?php
+
+namespace Travel\Libraries\Lists;
+
+use Travel\Libraries\APIController;
+use Travel\Libraries\Utility;
+use Phalcon\Mvc\Controller;
+use Phalcon\Db;
+
+class ListKAPAL extends Controller
+{
+
+    protected $invoking = "List Kapal";
+
+    public static function init($implodedata)
+    {
+        $data = explode("#", $implodedata);
+        return $data;
+    }
+
+    public function initObject($data)
+    {
+
+        $data_kapal = json_decode($data->bill_info70);
+        $cabins = json_decode($data->bill_info34);
+        $listcabin = "";
+        foreach ($cabins as $cabin) {
+            $listcabin .= $cabin[0] . '-' . $cabin[1] . ", ";
+        }
+        $listcabin = substr($listcabin, 0, -2);
+        return (object) array(
+            "additional" => array(
+                array("key" => "Kode Booking", "value" => $data->bill_info5),
+                array("key" => "Nama Kapal", "value" => $data_kapal->data_ship_name),
+                array("key" => "Pelabuhan Asal", "value" => $data_kapal->data_pelabuhan_asal),
+                array("key" => "Pelabuhan Tujuan", "value" => $data_kapal->data_pelabuhan_tujuan),
+                array("key" => "Waktu Keberangkatan", "value" =>  $this->getFullDate($data->bill_info24, $data->bill_info30)),
+                array("key" => "Waktu Kedatangan", "value" => $this->getFullDate($data->bill_info29, $data->bill_info31)),
+                array("key" => "Kabin", "value" => $listcabin)
+            ),
+            "url_etiket" => "http://api.Travel.co.id/app/generate_etiket?id_transaksi=" . $data->id_transaksi,
+            "url_struk" => "http://api.Travel.co.id/app/generate_struk?transaction_id=" . $data->id_transaksi,
+            "url_image" => "http://static.scash.bz/jadipergi/img/wisata/FA53732/21112016_9313554dd92b6aff2bfe8e09ebc865ca.jpg"
+        );
+    }
+
+    public function initBook(APIController $apiController)
+    {
+
+        $outlet_id = $apiController->getOutletId();
+        $result = array();
+        $expiredTime = Utility::getBookExpiredTime($apiController->request->product);
+        $query = $apiController->db->query("SELECT * FROM transaksi
+            WHERE id_transaksi IN (
+                SELECT max(id_transaksi) FROM transaksi 
+                WHERE id_outlet = ? AND id_produk like '%PELNI%' AND response_code = '00' AND time_response + interval '" . $expiredTime . "' >= now()
+                GROUP BY bill_info2
+            ) ORDER BY time_request DESC", [$outlet_id]);
+
+        $query->setFetchMode(Db::FETCH_OBJ);
+
+        foreach ($query->fetchAll() as $value) {
+            $timeRequest = date('Y-m-d H:i:s', strtotime($value->time_request));
+            $timeLimit = date('Y-m-d H:i:s', strtotime('+2 hour', strtotime($timeRequest)));
+
+            if ($value->jenis_transaksi == "0") {
+                $data_kapal = json_decode($value->bill_info70);
+                $result[] = (object) array(
+                    "id_transaksi" => $value->id_transaksi,
+                    "kode_booking" => $value->bill_info2,
+                    "nama_kapal" => $data_kapal->data_ship_name,
+                    "origin" => $data_kapal->data_pelabuhan_asal,
+                    "destination" => $data_kapal->data_pelabuhan_tujuan,
+                    "tanggal_keberangkatan" => $value->bill_info24,
+                    "hari_keberangkatan" => $this->getDay($value->bill_info24),
+                    "jam_keberangkatan" => substr($value->bill_info30, 0, 2) . ":" . substr($value->bill_info30, 2, 2),
+                    "tanggal_kedatangan" => $value->bill_info29,
+                    "hari_kedatangan" => $this->getDay($value->bill_info29),
+                    "subClass" => $value->bill_info16,
+                    "jam_kedatangan" => substr($value->bill_info31, 0, 2) . ":" . substr($value->bill_info31, 2, 2),
+                    "penumpang" => $this->getPassengerKapal($value),
+                    "komisi" =>  Utility::getKomisi($apiController, $value->id_transaksi),
+                    "url_etiket" => "http://api.Travel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                    "url_struk" => "http://api.Travel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                    "expiredDate" => $timeLimit
+                );
+            }
+        }
+
+        return $result;
+    }
+    public function initPayment(APIController $apiController)
+    {
+
+        $result = array();
+        $query = $apiController->db->query("
+                (SELECT * FROM fmss.transaksi WHERE
+                fmss.transaksi.jenis_transaksi = 1 AND fmss.transaksi.response_code='00' AND
+                fmss.transaksi.id_produk like '%PELNI%' AND fmss.transaksi.id_outlet = ?)
+                union
+                (SELECT * FROM fmss.transaksi_backup WHERE
+                fmss.transaksi_backup.jenis_transaksi = 1 AND fmss.transaksi_backup.response_code='00' AND
+                fmss.transaksi_backup.id_produk like '%PELNI%' AND fmss.transaksi_backup.id_outlet = ?  
+                ORDER BY time_request DESC LIMIT ? )", [$apiController->getOutletId(), $apiController->getOutletId(), 20]);
+
+        $query->setFetchMode(Db::FETCH_OBJ);
+
+        $i = 0;
+
+        foreach ($query->fetchAll() as $value) {
+
+            $data_kapal = json_decode($value->bill_info70);
+
+            $result[$i] = (object) array(
+                "id_transaksi" => $value->id_transaksi,
+                "kode_booking" => $value->bill_info1,
+                "nama_kapal" => $data_kapal->data_ship_name,
+                "origin" => $data_kapal->data_pelabuhan_asal,
+                "destination" => $data_kapal->data_pelabuhan_tujuan,
+                "tanggal_keberangkatan" => $value->bill_info24,
+                "hari_keberangkatan" => $this->getDay($value->bill_info24),
+                "jam_keberangkatan" => substr($value->bill_info30, 0, 2) . ":" . substr($value->bill_info30, 2, 2),
+                "tanggal_kedatangan" => $value->bill_info29,
+                "hari_kedatangan" => $this->getDay($value->bill_info29),
+                "subClass" => $value->bill_info16,
+                "jam_kedatangan" => substr($value->bill_info31, 0, 2) . ":" . substr($value->bill_info31, 2, 2),
+                "penumpang" => $this->getPassengerKapal($value),
+                "url_etiket" => "http://api.Travel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                "url_struk" => "http://api.Travel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi
+            );
+
+            $i++;
+        }
+
+        return $result;
+    }
+
+    public function initStatus($paymentCode)
+    {
+        $query = $this->db->query("SELECT * FROM transaksi WHERE bill_info2 = ? order by time_request DESC LIMIT 1", [$paymentCode]);
+        $query->setFetchMode(Db::FETCH_OBJ);
+        $data = $query->fetch();
+        if (!$data) {
+            return (object) array("Status" => "PaymentCode tidak ditemukan", "paymentCode" => $bookCode);
+        }
+        return (object) array(
+            "paymentCode" => $data->bill_info2,
+            "Produk" => Utility::getProductName($this, $data->id_produk),
+            "Status" => (intval($data->jenis_transaksi) == 0) ? "Booking" : "Payment"
+        );
+    }
+
+    public function getFullDate($strdate, $time)
+    {
+        $timestamp = strtotime($strdate);
+        return preg_replace(Utility::getPattern(), Utility::getReplace(), date("l", $timestamp) . "," . date("d", $timestamp) . " " . date("F", $timestamp) . " " . date("Y", $timestamp) . " " . substr($time, 0, 2) . ":" . substr($time, 2, 2));
+    }
+
+    public function getDay($strdate)
+    {
+        $timestamp = strtotime($strdate);
+        return preg_replace(Utility::getPattern(), Utility::getReplace(), date("l", $timestamp));
+    }
+    public function getPassengerKapal($value)
+    {
+        $penumpang = array();
+        //75
+        $list_penumpang  = explode("|", $value->bill_info75);
+        for ($i = 0; $i <= 3; $i++) {
+            if (!$list_penumpang[$i])
+                break;
+            $penumpang[$i] = array("nama" => $list_penumpang[$i]);
+        }
+        return $penumpang;
+    }
+}

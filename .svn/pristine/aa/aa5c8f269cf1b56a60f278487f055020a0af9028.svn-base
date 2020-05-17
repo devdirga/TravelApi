@@ -1,0 +1,43 @@
+<?php
+
+namespace Fastravel\Wisata;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\Wisata\PaymentResponseParser;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\MTI;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Wisata";
+    
+    public function indexAction()
+    {
+        
+        $this->setMTI(MTI::WISATAPAY);
+        $this->setProductCode("TOURNEW");
+        
+        $message = new WisataMessage($this);
+        
+        $message->set(WisataMessage::FIELD_ID_PEL1, $this->request->bookCode);
+        $message->set(WisataMessage::FIELD_ID_PEL2, $this->request->bookCode);
+        $message->set(WisataMessage::FIELD_BOOK_CODE, $this->request->bookCode);
+        $message->set(WisataMessage::FIELD_PAYMENT_CODE, $this->request->bookCode);
+        $message->set(WisataMessage::FIELD_TRX_ID, $this->request->inquiryTrxId);
+        
+        $this->request->simulateSuccess = $this->config->environment;
+        
+        if(!$this->request->simulateSuccess)
+        {
+            if(!Utility::isTesterOutlet($this->getOutletId()))
+            {
+                $this->sendToCore($message);
+            }
+            
+        }
+            
+        PaymentResponseParser::instance()->parse($message)->into($this);
+        
+    }
+}

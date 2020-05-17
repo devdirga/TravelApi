@@ -1,0 +1,80 @@
+<?php
+
+namespace Travel\Libraries\Parser\Flight;
+
+use Travel\Libraries\Parser\BaseResponseParser;
+use Travel\Libraries\Parser\ResponseParser;
+use Travel\Libraries\Message\FlightMessage;
+use Travel\Libraries\APIController;
+use Travel\Libraries\Utility;
+
+class BookResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Flight Message.
+     * 
+     * @var FlightMessage
+     */
+    protected $message;
+
+    public function into(APIController $apiController)
+    {
+
+        error_log("BOOK___INFO : " . $this->message->toString());
+
+        $rc = $this->message->get(FlightMessage::FIELD_STATUS);
+        $rd = $this->message->get(FlightMessage::FIELD_KETERANGAN);
+
+        if ($rc == "00") {
+            $apiController->response->setDataAsObject();
+
+            $apiController->response->data->passengers = $this->message->get(FlightMessage::FIELD_ADULT7);
+            $apiController->response->data->details = $this->message->get(FlightMessage::FIELD_MESSAGE);
+            $apiController->response->data->bookingCode = $this->message->get(FlightMessage::FIELD_BOOKING_CODE);
+            $apiController->response->data->paymentCode = $this->message->get(FlightMessage::FIELD_PAYMENT_CODE);
+
+            $apiController->response->data->flightCode1 = $this->message->get(FlightMessage::FIELD_CODE_FLIGHT);
+
+            if ($this->message->get(FlightMessage::FIELD_CODE_FLIGHT_TRANSIT_GO) != "") {
+                $apiController->response->data->flightCode2 = $this->message->get(FlightMessage::FIELD_CODE_FLIGHT_TRANSIT_GO);
+            }
+
+            if ($this->message->get(FlightMessage::FIELD_CODE_FLIGHT_TRANSIT_GO2) != "") {
+                $apiController->response->data->flightCode3 = $this->message->get(FlightMessage::FIELD_CODE_FLIGHT_TRANSIT_GO2);
+            }
+
+            $apiController->response->data->departureTime1 = $this->message->get(FlightMessage::FIELD_DEPT_TIME);
+
+            if ($this->message->get(FlightMessage::FIELD_DEPT_TIME2) != "") {
+                $apiController->response->data->departureTime2 = $this->message->get(FlightMessage::FIELD_DEPT_TIME2);
+            }
+
+            if ($this->message->get(FlightMessage::FIELD_DEPT_TIME3) != "") {
+                $apiController->response->data->departureTime3 = $this->message->get(FlightMessage::FIELD_DEPT_TIME3);
+            }
+
+            $apiController->response->data->arrivalTime1 = $this->message->get(FlightMessage::FIELD_ARR_TIME);
+
+            if ($this->message->get(FlightMessage::FIELD_ARR_TIME2) != "") {
+                $apiController->response->data->arrivalTime2 = $this->message->get(FlightMessage::FIELD_ARR_TIME2);
+            }
+
+            if ($this->message->get(FlightMessage::FIELD_ARR_TIME3) != "") {
+                $apiController->response->data->arrivalTime3 = $this->message->get(FlightMessage::FIELD_ARR_TIME3);
+            }
+
+            $apiController->response->data->reservationDate = $this->message->get(FlightMessage::FIELD_RESERVATION_DATE);
+            $apiController->response->data->timeLimit = $this->message->get(FlightMessage::FIELD_TIMELIMIT);
+            $apiController->response->data->timeLimitYMD = Utility::getFormatYMD($this->message->get(FlightMessage::FIELD_TIMELIMIT));
+            $apiController->response->data->flightInfoGo = $this->message->get(FlightMessage::FIELD_FLIGHT_INFO_GO);
+            $apiController->response->data->nominal = $this->message->get(FlightMessage::FIELD_NOMINAL);
+            $apiController->response->data->comission = $this->message->get(FlightMessage::FIELD_OTHER_PAID);
+            $apiController->response->data->nominalAdmin = $this->message->get(FlightMessage::FIELD_NOMINAL_ADMIN);
+            $apiController->response->data->transactionId = $this->message->get(FlightMessage::FIELD_TRX_ID);
+            $apiController->response->data->komisi = Utility::getKomisi($apiController, $this->message->get(FlightMessage::FIELD_TRX_ID));
+        }
+
+        $apiController->response->mid = $this->message->get(FlightMessage::FIELD_MID);
+        $apiController->response->setStatus($rc, $rd);
+    }
+}

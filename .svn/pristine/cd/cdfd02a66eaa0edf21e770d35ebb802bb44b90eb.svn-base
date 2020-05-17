@@ -1,0 +1,17 @@
+<?php
+
+namespace Fastravel\Train;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\Parser\Train\StationResponseParser;
+
+class StationController extends APIController
+{
+    protected $invoking = "Station Train";
+    
+    public function indexAction()
+    {
+        StationResponseParser::instance()->parse(new TrainMessage($this))->into($this);
+    }
+}

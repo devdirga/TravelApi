@@ -1,0 +1,248 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\ProductCode;
+use Fastravel\Libraries\HttpConnect;
+use Fastravel\Libraries\Utility;
+use Phalcon\Db;
+
+class GlobalPaymentResponseParser extends BaseResponseParser implements ResponseParser {
+
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+
+    public function into(APIController $apiController) {
+
+        $apiController->response->setDataAsObject();
+
+        $d = $apiController->db->query("select * from transaksi where id_transaksi = ?", [$apiController->request->transaction_id]);
+
+        $d->setFetchMode(Db::FETCH_OBJ);
+
+        $data = $d->fetch();
+
+        if ($apiController->request->product == ProductCode::PESAWAT) {
+
+            $classname2 = "";
+            $classname3 = "";
+            $classname4 = "";
+            
+            if(intval($data->bill_info65) == 1){
+                $classname2 = $data->bill_info16;
+            }
+            
+            if(intval($data->bill_info65) == 2){
+                $classname2 = $data->bill_info16;
+                $classname3 = $data->bill_info16;
+            }
+            
+            if(intval($data->bill_info65) == 3){
+                $classname2 = $data->bill_info16;
+                $classname3 = $data->bill_info16;
+                $classname4 = $data->bill_info16;
+            }
+            
+            $message = array(
+                "airline" => $data->id_produk,
+                "transactionId" => $data->id_transaksi,
+                "bookingCode" => $data->bill_info1,
+                "paymentCode" => $data->bill_info5,
+                "simulateSuccess" => false,
+                "classname2" => $classname2,
+                "classname3" => $classname3,
+                "classname4" => $classname4,
+                "token" => $apiController->request->token
+            );
+
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/flight/payment", 80, json_encode($message), "POST");
+            
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+                
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+                
+            }
+        } else if ($apiController->request->product == ProductCode::KERETA) {
+
+            $message = array(
+                "productCode" => $data->id_produk,
+                "bookingCode" => $data->bill_info2,
+                "transactionId" => $data->id_transaksi,
+                "nominal" => $data->nominal,
+                "nominal_admin" => $data->nominal_admin, // nominal_admin - bill_info14
+                "pay_type" => "TUNAI",
+                "simulateSuccess" => false,
+                "discount" => $data->bill_info14,
+                "token" => $apiController->request->token
+            );
+
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/train/payment", 80, json_encode($message), "POST");
+            
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+            }
+        } else if ($apiController->request->product == ProductCode::KAPAL) {
+            
+             $message = array(
+                "paymentCode" => $data->bill_info2,
+                "transactionId" => $data->id_transaksi,
+                "simulateSuccess" => false,
+                "token" => $apiController->request->token
+            );
+             
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/pelni/payment", 80, json_encode($message), "POST");
+            
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+            }
+            
+            
+        } else if ($apiController->request->product == ProductCode::TRAVEL) {
+            
+             $message = array(
+                "produk" => $data->id_produk,
+                "command" => "PAY_BOOKING",
+                "kodeBook" => $data->bill_info1,
+                "kodePembayan" => $data->bill_info2,
+                "idTransaksi" => $data->id_transaksi,
+                "nominal" => $data->nominal,
+                "nominalAdmin" => $data->nominal_admin,
+                "token" => $apiController->request->token
+            );
+             
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/pelni/payment", 80, json_encode($message), "POST");
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+            }
+            
+        } else if ($apiController->request->product == ProductCode::WISATA) {
+            
+            $message = array(
+                "bookCode" => $data->bill_info43,
+                "nominalAdmin" => $data->nominal_admin,
+                "inquiryTrxId" => $data->id_transaksi,
+                "simulateSuccess" => false,
+                "token" => $apiController->request->token
+            );
+            
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/wisata/payment", 80, json_encode($message), "POST");
+            
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+                
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+            }
+            
+        } else if ($apiController->request->product == ProductCode::HOTEL) {
+            
+            $qHotel = $apiController->db->query("SELECT id_hotel FROM hotel_data_detail_3 WHERE id_hotel_biller = ?", [$data->bill_info25]);
+            $qHotel->setFetchMode(Db::FETCH_OBJ);
+            $dataHotel = $qHotel->fetch();
+            
+            $message = array(
+                "billerId" => $data->id_biller,
+                "simulateSuccess" => false,
+                "searchingMID" => $data->mid, //what field?
+                "room" => $data->bill_info35,
+                "guest" => $data->bill_info36,
+                "bookingCode" => $data->bill_info2,
+                "contact" => array(
+                    "phone" => $data->bill_info40,
+                    "firstName" => $data->bill_info41,
+                    "lastName" => $data->bill_info42,
+                    "email" => $data->bill_info43,
+                    "city" => $data->bill_info45,
+                ),
+                "hotelDetail" => array(
+                    "internalCode" => $data->bill_info29,
+                    "hotelId" => $dataHotel->id_hotel,
+                    "categoryId" => $data->bill_info49,
+                    "categoryName" => $data->bill_info15, //what field?
+                    "checkInDate" => $data->bill_info33,
+                    "checkOutDate" => $data->bill_info34,
+                    "bfType" => "",
+                    "typeName" => $data->bill_info15, //what field?
+                    "price" => $data->bill_info57,
+                ),
+                "token" => $apiController->request->token
+            );
+            
+            
+
+            $r = HttpConnect::sendToURL($apiController->config->app->jwtIssuer . "/hotel/payment", 80, json_encode($message), "POST");
+            
+            $s = json_decode($r->response);
+
+            if ($s->rc == '00') {
+
+                $apiController->response->setStatus("00", "Success");
+                $apiController->response->data->transaction_id = $s->data->transaction_id;
+                $apiController->response->data->url_etiket = $s->data->url_etiket;
+                $apiController->response->data->url_struk = $s->data->url_struk;
+                $apiController->response->data->komisi = Utility::getCommission($apiController, $s->data->transaction_id);
+                
+            } else {
+
+                $apiController->response->setStatus($s->rc, $s->rd);
+            }
+        }
+    }
+
+}

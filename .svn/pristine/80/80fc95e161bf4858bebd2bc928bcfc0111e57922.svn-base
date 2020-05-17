@@ -1,0 +1,268 @@
+<?php
+namespace Fastravel\Train;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\HttpConnect;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\MTI;
+
+class InquiryOnlineBookController extends APIController {
+
+    protected $invoking = "Inquiry Online Booking Train";
+
+    public function indexAction() {
+        
+        $paymentCode = $this->request->paymentCode;
+
+        if (substr($paymentCode, 0, 3) == "789") 
+        { 
+            /* booking mandiri jadi harus ambil data dari KAI */
+            
+            $message = array($paymentCode,$this->getOutletId(),$this->getPin(),$this->config->trainOnlineBook->via);
+
+            $urlTarget = "http://" . $this->config->trainOnlineBook->host . ":"
+                    . $this->config->trainOnlineBook->port . "/"
+                    . $this->config->trainOnlineBook->path . "/"
+                    . $this->config->trainOnlineBook->inquiry . "?inquiry_desktop=" . urlencode(implode(':', $message));
+
+            $response = HttpConnect::sendToURL($urlTarget, $this->config->trainOnlineBook->port, "GET");
+
+            $data = json_decode($response->response);
+
+            $rc = $data->err_code;
+
+            $rd = $data->result;
+
+            if (intval($rc) === 7) {
+
+                $is_railink = false;
+
+                $arr_result = explode("~", $data->{"result"});
+
+                if ($arr_result[1] == "RAIL") {
+                    $data->{"result"} = str_replace("~RAIL", "", $data->{"result"});
+                    $is_railink = true;
+                }
+
+                $v = explode(':', $data->{"result"});
+
+                $arrAdmin = explode('#', $v[6]);
+
+                $nominal_admin = $arrAdmin[0];
+
+                $voucher = $arrAdmin[1];
+
+                $diskon = -1 * (7500 - intval($nominal_admin));
+
+                if ($is_railink) {
+                    $diskon = -1 * (0 - intval($nominal_admin));
+                }
+
+                $diskon_kai = $arrAdmin[2];
+
+                $total_bayar_payment_code = intval(trim($v[5])) + intval($nominal_admin) + intval($diskon_kai) - intval($voucher);
+
+                $data_lain = array("diskon" => $diskon, "diskon_kai" => $diskon_kai, "voucher" => $voucher, "total_bayar_payment_code" => $total_bayar_payment_code);
+
+                $formatStruk = $this->generateStruk($is_railink, $v, $data_lain);
+
+                $arrInquiry = array('err_code' => $data->err_code,
+                    'struk' => $formatStruk
+                );
+
+                if ($this->config->trainOnlineBook->via == "YM" && $this->getOutletId() != "") 
+                {    
+                    $outletData = $this->getOutletData($this->getOutletId());
+                 
+                    $saldo = $outletData->balance;
+
+                    if ($saldo != 0) 
+                    {
+                        $arrInquiry = array('asal' => $v[3],
+                            'tujuan' => $v[4],
+                            'nominal' => $v[5],
+                            'nominal_admin' => "7500",
+                            'diskon' => $diskon,
+                            'nama' => $v[10],
+                            'noid' => $v[11],
+                            'nama_ka' => $v[12],
+                            'stasiun_berangkat' => $v[13],
+                            'jam_berangkat' => $v[14],
+                            'stasiun_tiba' => $v[15],
+                            'jam_tiba' => $v[16],
+                            'kelas' => $v[17],
+                            'biaya_total' => $v[25],
+                            'ldep_date' => $v[29],
+                            'saldo' => $saldo);
+                    }
+                }
+
+                $this->response->setDataAsObject();
+
+                $this->response->data = $arrInquiry;
+            }
+
+            $this->response->setStatus($rc == "7" ? "00" : $rc, $rc == "00" ? "Success" : $rd);
+            
+        } 
+        else 
+        {
+            /* call center jadi harus ambil data dari KAI */ 
+
+            $book_code = "";
+
+            $numcode = "";
+
+            if (preg_match("/[A-Z]/", $paymentCode) && strlen($paymentCode) == 6) 
+            {
+                $book_code = $paymentCode; // bookcode ex : ABCDEF
+            } 
+            else 
+            {
+                $numcode = $paymentCode; // numcode ex : 999123 
+            }
+
+            $this->setMTI(MTI::NKAIOBINQ);
+
+            $this->setProductCode($this->request->productCode);
+
+            $message = new TrainMessage($this);
+
+            $message->set(TrainMessage::FIELD_STEP, "2");
+            $message->set(TrainMessage::FIELD_VIA, $this->config->trainOnlineBook->via);
+            $message->set(TrainMessage::FIELD_ID_PEL2, $book_code);
+            $message->set(TrainMessage::FIELD_ID_PEL3, $numcode);
+            $message->set(TrainMessage::FIELD_LOKET_ID, $this->getOutletId());
+            $message->set(TrainMessage::FIELD_PIN, $this->getPin());
+            $message->set(TrainMessage::FIELD_ID_PEL3, $numcode);
+            
+            $this->sendToCore($message);
+
+            //InquiryOnlineBookResponseParser::instance()->parse($message)->into($this);
+
+            $rc = $message->get(TrainMessage::FIELD_STATUS);
+
+            $rd = $message->get(TrainMessage::FIELD_KETERANGAN);
+
+            if ($message->get(TrainMessage::FIELD_STATUS) === "00") 
+            {
+
+                $jmbrgkt = substr($message->get(TrainMessage::FIELD_DEP_DATE), 0, 2);
+                $mntbrgkt = substr($message->get(TrainMessage::FIELD_DEP_DATE), 2);
+                $jmtiba = substr($message->get(TrainMessage::FIELD_ARV_TIME), 0, 2);
+                $mnttiba = substr($message->get(TrainMessage::FIELD_ARV_TIME), 2);
+
+                $jam_berangkat = $jmbrgkt . ":" . $mntbrgkt;
+                $jam_tiba = $jmtiba . ":" . $mnttiba;
+                $total_biaya = intval(intval($message->get(TrainMessage::FIELD_NOMINAL)) + intval("7500") + intval($message->get(TrainMessage::FIELD_SEAT_MAP_NULL)));
+
+
+                $formatStruk = "INFO TAGIHAN RESERVASI TIKET KAI ONLINE" . "\n"
+                        . "=======================================" . "\n"
+                        . "\n"
+                        . "Tanggal           : " . str_pad(date('d M Y') . " " . date('H:i'), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "No. Identitas     : " . str_pad($message->get(TrainMessage::FIELD_ADULT_ID_NO1), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Nama              : " . str_pad($message->get(TrainMessage::FIELD_ADULT_NAME1), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Nama KA           : " . str_pad($message->get(TrainMessage::FIELD_TRAIN_NAME), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Tgl Keberangkatan : " . str_pad($message->get(TrainMessage::FIELD_DEP_DATE) . " " . $jam_berangkat, 40, " ", STR_PAD_RIGHT) . "\n"
+                        . "Tgl Kedatangan    : " . str_pad($message->get(TrainMessage::FIELD_ARV_DATE) . " " . $jam_tiba, 40, " ", STR_PAD_RIGHT) . "\n"
+                        . "Stasiun asal      : " . str_pad($message->get(TrainMessage::FIELD_ORIGINATION), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Stasiun tujuan    : " . str_pad($message->get(TrainMessage::FIELD_DESTINATION), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Kelas             : " . str_pad($message->get(TrainMessage::FIELD_CLASS), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Kursi             : " . str_pad($message->get(TrainMessage::FIELD_SEAT_NUMBER), 35, " ", STR_PAD_RIGHT) . "\n"
+                        . "Nominal           : " . str_pad(number_format($message->get(TrainMessage::FIELD_NOMINAL), 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                        . "Biaya Admin       : " . str_pad("7.500", 15, " ", STR_PAD_LEFT) . "\n"
+                        . "Diskon Channel    : " . str_pad(number_format(intval($message->get(TrainMessage::FIELD_SEAT_MAP_NULL)), 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                        . "                    " . str_pad("----------------", 15, " ", STR_PAD_LEFT) . "\n"
+                        . "Total Biaya       : " . str_pad(number_format($total_biaya, 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n";
+
+                $arrInquiry = array('err_code' => "7",'struk' => $formatStruk);
+
+                if ($this->config->trainOnlineBook->via == "YM" && $this->getOutletId() != "") 
+                 {
+                    $outletData = $this->getOutletData($this->getOutletId());
+                    
+                    $saldo = $outletData->balance;
+                    
+                    if (intval($saldo) !== 0) 
+                    {
+                        $arrInquiry = $arrInquiry + array("saldo" => $saldo);
+                    }
+                }
+
+                $this->response->setDataAsObject();
+
+                $this->response->data = $arrInquiry;
+            } 
+            else 
+            {
+                $arrInquiry = array('err_code' => $message->get(TrainMessage::FIELD_STATUS),'err_msg' => $message->get(TrainMessage::FIELD_KETERANGAN));
+                
+                if ($this->config->trainOnlineBook->via == "YM" && $this->getOutletId() != "") 
+                {
+                    $d = $this->getOutletData($this->getOutletId());
+                    
+                    $saldo = $d->balance;
+                    
+                    if ($saldo != 0) 
+                    {
+                        $arrInquiry = $arrInquiry + array("saldo" => $saldo);
+                    }
+                }
+            }
+
+            $this->response->setStatus($rc == "7" ? "00" : $rc, $rc == "00" ? "Success" : $rd);
+        }
+    }
+
+    public function generateStruk($is_railink, $v, $data_lain) 
+    {
+
+        $formatStruk = "";
+
+        if (!$is_railink) 
+        {
+
+            $formatStruk = "INFO TAGIHAN RESERVASI TIKET KAI ONLINE" . "\n"
+                    . "=======================================" . "\n"
+                    . "\n"
+                    . "Tanggal           : " . str_pad(date('d M Y') . " " . date('H:i'), 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "No. Identitas     : " . str_pad($v[11], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nama              : " . str_pad($v[10], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nama KA           : " . str_pad($v[12], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Tgl Keberangkatan : " . str_pad($v[29], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Stasiun/Jam Asal  : " . str_pad($v[13] . " / " . $v[14], 40, " ", STR_PAD_RIGHT) . "\n"
+                    . "Stasiun/Jam Tiba  : " . str_pad($v[15] . " / " . $v[16], 40, " ", STR_PAD_RIGHT) . "\n"
+                    . "Kelas             : " . str_pad($v[17], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nominal           : " . str_pad(number_format($v[5], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Biaya Admin       : " . str_pad("7.500", 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Diskon Channel    : " . str_pad(number_format($data_lain['diskon_kai'], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Diskon Tambahan   : " . str_pad(number_format($data_lain['diskon'], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Voucher           : " . str_pad(number_format(intval(-1 * $data_lain['voucher']), 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "                    " . str_pad("----------------", 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Total Biaya       : " . str_pad(number_format($data_lain['total_bayar_payment_code'], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n";
+        } 
+        else 
+        {
+
+            $formatStruk = "INFO TAGIHAN RESERVASI KERETA BANDARA ONLINE" . "\n"
+                    . "=======================================" . "\n"
+                    . "\n"
+                    . "Tanggal           : " . str_pad(date('d M Y') . " " . date('H:i'), 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "No. Identitas     : " . str_pad($v[11], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nama              : " . str_pad($v[10], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nama KA           : " . str_pad($v[12], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Tgl Keberangkatan : " . str_pad($v[29], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Stasiun/Jam Asal  : " . str_pad($v[13] . " / " . $v[14], 40, " ", STR_PAD_RIGHT) . "\n"
+                    . "Stasiun/Jam Tiba  : " . str_pad($v[15] . " / " . $v[16], 40, " ", STR_PAD_RIGHT) . "\n"
+                    . "Kelas             : " . str_pad($v[17], 35, " ", STR_PAD_RIGHT) . "\n"
+                    . "Nominal           : " . str_pad(number_format($v[5], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Diskon Tambahan   : " . str_pad(number_format($data_lain['diskon'], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n"
+                    . "                    " . str_pad("----------------", 15, " ", STR_PAD_LEFT) . "\n"
+                    . "Total Biaya       : " . str_pad(number_format($data_lain['total_bayar_payment_code'], 0, '', '.'), 15, " ", STR_PAD_LEFT) . "\n";
+        }
+        
+        return $formatStruk;
+    }
+
+}

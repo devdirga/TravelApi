@@ -1,0 +1,116 @@
+<?php
+
+namespace Travel\Libraries\Message;
+
+use Travel\Libraries\APIController;
+use Travel\Libraries\Message\PaymentMessage;
+
+class TrainMessage extends PaymentMessage
+{
+    const FIELD_ERR_CODE = 21;
+    const FIELD_ERR_MSG = 22;
+    const FIELD_ORG = 23;
+    const FIELD_DES = 24;
+    const FIELD_DEP_DATE = 25;
+    const FIELD_ARV_DATE = 26;
+    const FIELD_SCHEDULE = 27;
+
+    const FIELD_TRAIN_NO = 28;
+    const FIELD_CLASS = 29;
+    const FIELD_SUBCLASS = 30;
+    const FIELD_NUM_PAX_ADULT = 31;
+    const FIELD_NUM_PAX_CHILD = 32;
+    const FIELD_NUM_PAX_INFANT = 33;
+    const FIELD_ADULT_NAME1 = 34;
+    const FIELD_ADULT_BIRTHDATE1 = 35;
+    const FIELD_ADULT_MOBILE1 = 36;
+    const FIELD_ADULT_ID_NO1 = 37;
+    const FIELD_ADULT_NAME2 = 38;
+    const FIELD_ADULT_BIRTHDATE2 = 39;
+    const FIELD_ADULT_MOBILE2 = 40;
+    const FIELD_ADULT_ID_NO2 = 41;
+    const FIELD_ADULT_NAME3 = 42;
+    const FIELD_ADULT_BIRTHDATE3 = 43;
+    const FIELD_ADULT_MOBILE3 = 44;
+    const FIELD_ADULT_ID_NO3 = 45;
+    const FIELD_ADULT_NAME4 = 46;
+    const FIELD_ADULT_BIRTHDATE4 = 47;
+    const FIELD_ADULT_MOBILE4 = 48;
+    const FIELD_ADULT_ID_NO4 = 49;
+    const FIELD_CHILD_NAME1 = 50;
+    const FIELD_CHILD_BIRTHDATE1 = 51;
+    const FIELD_CHILD_NAME2 = 52;
+    const FIELD_CHILD_BIRTHDATE2 = 53;
+    const FIELD_CHILD_NAME3 = 54;
+    const FIELD_CHILD_BIRTHDATE3 = 55;
+    const FIELD_CHILD_NAME4 = 56;
+    const FIELD_CHILD_BIRTHDATE4 = 57;
+    const FIELD_INFANT_NAME1 = 58;
+    const FIELD_INFANT_BIRTHDATE1 = 59;
+    const FIELD_INFANT_NAME2 = 60;
+    const FIELD_INFANT_BIRTHDATE2 = 61;
+    const FIELD_INFANT_NAME3 = 62;
+    const FIELD_INFANT_BIRTHDATE3 = 63;
+    const FIELD_INFANT_NAME4 = 64;
+    const FIELD_INFANT_BIRTHDATE4 = 65;
+    const FIELD_CALLER = 66;
+
+    const FIELD_NUM_CODE = 67;
+    const FIELD_BOOK_CODE = 68;
+    const FIELD_SEAT = 69;
+    const FIELD_NORMAL_SALES = 70;
+    const FIELD_EXTRA_FEE = 71;
+    const FIELD_BOOK_BALANCE = 72;
+
+    const FIELD_SEAT_MAP_NULL = 73;
+    const FIELD_WAGON_CODE = 74;
+    const FIELD_WAGON_NO = 75;
+
+    const FIELD_WAGON_CODE1 = 76;
+    const FIELD_WAGON_NO1 = 77;
+    const FIELD_SEAT_ROW1 = 78;
+    const FIELD_SEAT_COL1 = 79;
+
+    const FIELD_WAGON_CODE2 = 80;
+    const FIELD_WAGON_NO2 = 81;
+    const FIELD_SEAT_ROW2 = 82;
+    const FIELD_SEAT_COL2 = 83;
+
+    const FIELD_WAGON_CODE3 = 84;
+    const FIELD_WAGON_NO3 = 85;
+    const FIELD_SEAT_ROW3 = 86;
+    const FIELD_SEAT_COL3 = 87;
+
+    const FIELD_WAGON_CODE4 = 88;
+    const FIELD_WAGON_NO4 = 89;
+    const FIELD_SEAT_ROW4 = 90;
+    const FIELD_SEAT_COL4 = 91;
+
+    const FIELD_CANCEL_REASON = 92;
+    const FIELD_STATUS_CANCEL = 93;
+    const FIELD_REFUND = 94;
+
+    const FIELD_PAY_TYPE = 95;
+    const FIELD_ROUTE = 96;
+    const FIELD_PAX = 97;
+    const FIELD_PAX_NUM = 98;
+    const FIELD_REVENUE = 99;
+    const FIELD_TRAIN_NAME = 100;
+    const FIELD_ORIGINATION = 101;
+    const FIELD_DEP_TIME = 102;
+    const FIELD_DESTINATION = 103;
+    const FIELD_ARV_TIME = 104;
+    const FIELD_SEAT_NUMBER = 105;
+    const FIELD_PRICE_ADULT = 106;
+    const FIELD_PRICE_CHILD = 107;
+    const FIELD_PRICE_INFANT = 108;
+
+    protected $dataLength = 109;
+
+    public function __construct(APIController $controller)
+    {
+        parent::__construct($controller);
+
+        $this->fillDefault(21);
+    }
+}

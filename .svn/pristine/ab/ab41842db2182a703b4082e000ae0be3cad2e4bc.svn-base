@@ -1,0 +1,63 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\ProductCode;
+use Phalcon\Db;
+
+use Fastravel\Libraries\Lists\ListPESAWAT;
+use Fastravel\Libraries\Lists\ListHOTEL;
+use Fastravel\Libraries\Lists\ListKERETA;
+use Fastravel\Libraries\Lists\ListKAPAL;
+use Fastravel\Libraries\Lists\ListWISATA;
+use Fastravel\Libraries\Lists\ListTRAVEL;
+
+
+class TransactionBookListResponseParser extends BaseResponseParser  implements ResponseParser{
+
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+
+    public function into(APIController $apiController) {
+        
+        $result = array();
+        
+        //$classname = new \ReflectionClass("List". $apiController->request->product);
+        
+        //$apiController->response->data = $classname->initBook($apiController);
+        
+        switch ($apiController->request->product){
+            case ProductCode::PESAWAT:
+                $result = (new ListPESAWAT())->initBook($apiController);
+            break;
+            case ProductCode::KERETA:
+                $result = (new ListKERETA())->initBook($apiController);
+            break;
+            case ProductCode::WISATA:
+                $result = (new ListWISATA())->initBook($apiController);
+            break;
+            case ProductCode::HOTEL:
+                $result = (new ListHOTEL())->initBook($apiController);
+            break;   
+            case ProductCode::KAPAL:
+                $result = (new ListKAPAL())->initBook($apiController);
+            break;   
+            case ProductCode::TRAVEL:
+                $result = (new ListTRAVEL())->initBook($apiController);
+            break;  
+            default:
+            break;
+        }
+        $apiController->response->data = $result;
+        
+    }
+
+}

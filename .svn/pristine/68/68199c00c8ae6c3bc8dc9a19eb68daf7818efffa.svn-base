@@ -1,0 +1,258 @@
+<?php
+
+namespace Fastravel\Libraries\Lists;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+use Phalcon\Mvc\Controller;
+use Phalcon\Db;
+
+class ListPESAWAT extends Controller {
+
+    protected $invoking = "List Pesawat";
+    
+    protected $pattern = array (
+        '/Mon[^day]/','/Tue[^sday]/','/Wed[^nesday]/','/Thu[^rsday]/',
+        '/Fri[^day]/','/Sat[^urday]/','/Sun[^day]/','/Monday/','/Tuesday/',
+        '/Wednesday/','/Thursday/','/Friday/','/Saturday/','/Sunday/',
+        '/Jan[^uary]/','/Feb[^ruary]/','/Mar[^ch]/','/Apr[^il]/','/May/',
+        '/Jun[^e]/','/Jul[^y]/','/Aug[^ust]/','/Sep[^tember]/','/Oct[^ober]/',
+        '/Nov[^ember]/','/Dec[^ember]/','/January/','/February/','/March/',
+        '/April/','/June/','/July/','/August/','/September/','/October/',
+        '/November/','/December/',
+    );
+    protected $replace = array ( 'Sen','Sel','Rab','Kam','Jum','Sab','Min',
+        'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu',
+        'Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des',
+        'Januari','Februari','Maret','April','Juni','Juli','Agustus','Sepember',
+        'Oktober','November','Desember',
+    );
+
+    public static function init($implodedata) 
+    {
+        $data = explode("#", $implodedata);
+        return $data;
+    }
+
+    public function initObject($data) 
+    {
+        $additionalData =  array(
+            array("key" => "Kode Booking", "value" => $data->bill_info1),
+            array("key" => "Maskapai", "value" => $this->getProductName($data->id_produk)),
+            array("key" => "Rute", "value" =>  $this->getAirPortName($data->bill_info11) . " - " . $this->getAirPortName($data->bill_info12)),
+            array("key" => "Waktu Keberangkatan", "value" => $this->getFullDate($data->bill_info13,$data->bill_info22)),
+            array("key" => "Waktu Kedatangan", "value" => $this->getFullDate($data->bill_info13,$data->bill_info23)),
+            array("key" => "Kode Penerbangan", "value" => $data->bill_info15),
+            array("key" => "Class", "value" => $data->bill_info66)
+        );
+        
+        $dataPenumpang = $this->getPassenger($data);
+        foreach($dataPenumpang as $penumpang){
+            array_push($additionalData, array(
+                "key" => "Penumpang ".Utility::camelizeWords($penumpang["status"]), 
+                "value" => Utility::camelizeWords($penumpang["title"] . " " .$penumpang["nama"]))
+            );
+        }
+        return (object) array(
+                    "additional" => $additionalData,
+                    "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $data->id_transaksi,
+                    "url_struk" => "http://api.fastravel.co.id/app/generate_struk?transaction_id=" . $data->id_transaksi,
+                    "url_image" => "http://static.scash.bz/jadipergi/img/wisata/FA53732/21112016_9313554dd92b6aff2bfe8e09ebc865ca.jpg"
+        );
+    }
+
+    public function initBook(APIController $apiController) 
+    {
+        
+        $outlet_id = $apiController->getOutletId();
+        $result = array();      
+        $query = $this->db->query("
+                SELECT * FROM fmss.transaksi
+                INNER JOIN fmss.mt_produk ON fmss.transaksi.id_produk = fmss.mt_produk.id_produk
+                WHERE
+                fmss.transaksi.jenis_transaksi = 0 AND fmss.transaksi.response_code='00' AND
+                fmss.mt_produk.id_produk like  'TP%' AND fmss.transaksi.id_outlet = ? 
+                ORDER BY id_transaksi DESC ", 
+                [$outlet_id]);
+        
+        $query->setFetchMode(Db::FETCH_OBJ);
+        
+        foreach ($query->fetchAll() as $value) 
+        {
+            $isExpired = $this->isExpired($value->bill_info31);
+            
+            if(!$isExpired)
+            {
+                $result[] = (object) array(
+                            "id_transaksi" => $value->id_transaksi,
+                            "kode_booking" => ($value->bill_info1 === null) ? "" : $value->bill_info1,
+                            "origin" => $this->getAirPortName($value->bill_info11),
+                            "destination" => $this->getAirPortName($value->bill_info12),
+                            "tanggal_keberangkatan" => $this->getDate($value->bill_info13) ,
+                            "hari_keberangkatan" => $this->getDay($value->bill_info13),
+                            "jam_keberangkatan" => $value->bill_info22,
+                            "tanggal_kedatangan" => $this->getDate($value->bill_info13),
+                            "hari_kedatangan" => $this->getDay($value->bill_info13),
+                            "jam_kedatangan" => $value->bill_info23,
+                            "kode_maskapai" => $value->bill_info15,
+                            "nama_maskapai" => $this->getProductName($value->id_produk),
+                            "penumpang" => $this->getPassenger($value),
+                            "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                            "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                            "airlineIcon" => "http://static.bebasbayar.com/maskapai/" .   $this->getProdukLogo($value->id_produk),                        
+                            "subClass" => $value->bill_info66,
+                            "nominal" => $value->nominal,
+                            "nominal_admin" => $value->nominal_admin,
+                            "komisi" =>  Utility::getKomisi($apiController,$value->id_transaksi),
+                            "duration" => Utility::getDuration2($value->bill_info13, $value->bill_info22, $value->bill_info23, Utility::getAirport($apiController, $value->bill_info11)->timezone, Utility::getAirport($apiController, $value->bill_info12)->timezone)
+                );
+            }
+            
+        }
+
+        return  $result;
+    }
+    
+    public function initPAYMENT(APIController $apiController){
+        
+        $result = array();
+
+        $query = $this->db->query("SELECT * FROM fmss.transaksi WHERE
+                fmss.transaksi.jenis_transaksi = 1 AND fmss.transaksi.response_code='00' AND
+                fmss.transaksi.id_produk like 'TP%' AND fmss.transaksi.id_outlet = ?
+                ORDER BY time_request DESC LIMIT ?", [$apiController->getOutletId(),10]);
+        
+        $query->setFetchMode(Db::FETCH_OBJ);
+        
+        $i = 0;
+        
+        foreach ($query->fetchAll() as $value) 
+        {
+            
+            
+            $result[$i] = (object) array(
+                        "id_transaksi" => $value->id_transaksi,
+                        "kode_booking" => ($value->bill_info1 === null) ? "" : $value->bill_info1,
+                        "origin" => $this->getAirPortName($value->bill_info11),
+                        "destination" => $this->getAirPortName($value->bill_info12),
+                        "tanggal_keberangkatan" => $this->getDate($value->bill_info13),
+                        "hari_keberangkatan" => $this->getDay($value->bill_info13),
+                        "jam_keberangkatan" => $value->bill_info22,
+                        "tanggal_kedatangan" => $this->getDate($value->bill_info13),
+                        "hari_kedatangan" => $this->getDay($value->bill_info13),
+                        "jam_kedatangan" => $value->bill_info23,
+                        "kode_maskapai" => $value->bill_info15,
+                        "nama_maskapai" => $this->getProductName($value->id_produk),
+                        "penumpang" => $this->getPassenger($value),
+                        "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                        "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                        "airlineIcon" => "http://static.bebasbayar.com/maskapai/" .   $this->getProdukLogo($value->id_produk),                        
+                        "subClass" => $value->bill_info66,
+                        "nominal" => $value->nominal,
+                        "nominal_admin" => $value->nominal_admin,
+                        "duration" => Utility::getDuration2($value->bill_info13, $value->bill_info22, $value->bill_info23, Utility::getAirport($apiController, $value->bill_info11)->timezone, Utility::getAirport($apiController, $value->bill_info12)->timezone)
+            );
+            $i++;
+        }
+        
+        return $result;
+        
+    }
+
+
+    
+    public function getAirPortName($kodeAirPort) {
+        $d = $this->db->query("select city_name from mt_destination where city_code = ? limit 1", [$kodeAirPort]);
+        $d->setFetchMode(Db::FETCH_OBJ);
+        $dt = $d->fetch();
+        return $dt->city_name;
+    }
+    
+    public function getFullDate($strdate,$time){
+        $timestamp = strtotime($strdate);    
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("l", $timestamp) . "," . date("d", $timestamp)." ". date("F", $timestamp)." ".date("Y", $timestamp). " ". $time );
+    }
+    
+    public function getDay($strdate){
+        $timestamp = strtotime($strdate);
+        return preg_replace($this->pattern,$this->replace,date("l", $timestamp));
+    }
+    
+    public function getDate($strdate){
+        $timestamp = strtotime($strdate);    
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("d", $timestamp)." ". date("F", $timestamp)." ".date("Y", $timestamp) );
+    }
+
+    public function getProductName($idProduct) {
+        $d = $this->db->query("select produk from mt_produk where id_produk = ? limit 1", [$idProduct]);
+        $d->setFetchMode(Db::FETCH_OBJ);
+        $dt = $d->fetch();
+        return $dt->produk;
+    }
+    
+    public function isExpired($time) {
+        $isExpired = ((\date("Y-m-d H:i:s") >= $time )? 1: 0);
+        return $isExpired;
+    }
+    
+    public function getProdukLogo($idProduct) {
+        if ($idProduct === "TPQZ") {
+            return "logo-airasia.png";
+        } elseif ($idProduct === "TPQG") {
+            return "logo-citilink.png";
+        } elseif ($idProduct === "TPXN") {
+            return "logo-expressair.png";
+        } elseif ($idProduct === "TPGA") {
+            return "logo-garuda.png";
+        } elseif ($idProduct === "TPJQ") {
+            return "logo_footer.png";
+        } elseif ($idProduct === "TPKP") {
+            return "logo-kalstar.png";
+        } elseif ($idProduct === "TPJT") {
+            return "logo-lionair.png";
+        } elseif ($idProduct === "TPSJ") {
+            return "logo-sriwijaya.png";
+        } elseif ($idProduct === "TPTR") {
+            return "tigerair-id-logo.gif";
+        } elseif ($idProduct === "TPMV") {
+            return "logo-transnusa.png";
+        } elseif ($idProduct === "TPTN") {
+            return "logo-trigana.png";
+        } else {
+            return "";
+        }
+    }
+
+    public function getPassenger($value) {
+        $penumpang = array();
+        $index = 0;
+        $daftar = array(
+            $value->bill_info34,
+            $value->bill_info35,
+            $value->bill_info36,
+            $value->bill_info37,
+            $value->bill_info38,
+            $value->bill_info39,
+            $value->bill_info40,
+            $value->bill_info41,
+            $value->bill_info42
+        );
+        for ($i = 0; $i < sizeof($daftar); $i++) {
+            if ($daftar[$i] !== '') {
+                $tmp = explode(";", $daftar[$i]);
+                $status = "";
+                if ($tmp[0] === 'ADT') {
+                    $status = "DEWASA";
+                } elseif ($tmp[0] === 'CHD') {
+                    $status = "ANAK";
+                } else {
+                    $status = "BAYI";
+                }
+                $penumpang[$index] = array("status" => $status, "nama" => $tmp[2] ." ".$tmp[3] , "title" => $tmp[1]);
+                $index++;
+            }
+        }
+        return $penumpang;
+    }
+
+}

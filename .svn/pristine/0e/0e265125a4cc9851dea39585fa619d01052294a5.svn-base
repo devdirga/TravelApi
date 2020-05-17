@@ -1,0 +1,26 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+
+class SignOutResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(AppMessage::FIELD_STATUS);
+        $rd = $this->message->get(AppMessage::FIELD_KETERANGAN);
+        
+        $apiController->response->setStatus($rc, $rd);
+    }
+}

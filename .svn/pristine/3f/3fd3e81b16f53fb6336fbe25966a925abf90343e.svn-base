@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\HolidayResponseParser;
+
+class HolidayController extends APIController
+{
+    protected $invoking = "Holiday App";
+    
+    public function indexAction()
+    {
+        $message = new AppMessage($this);
+        
+        HolidayResponseParser::instance()->parse($message)->into($this);
+    }
+}

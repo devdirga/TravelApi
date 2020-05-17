@@ -1,0 +1,72 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Hotel;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\APIController;
+
+class DetailResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Hotel Message.
+     * 
+     * @var HotelMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(HotelMessage::FIELD_STATUS);
+        $rd = $this->message->get(HotelMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            $apiController->response->setDataAsObject();
+
+            $apiController->response->data = json_decode($this->message->get(HotelMessage::FIELD_HOTEL_DATA));
+            
+            if(strpos($apiController->request->hotelId, 'business') !== false){
+                $idHotelFp = $apiController->db->query("select id_hotel from hotel_data_detail_3 where id_hotel_biller = '".$this->message->get(HotelMessage::FIELD_HOTEL_ID)."'")->fetch()['id_hotel'];
+                $apiController->response->data->hotelId = strval($idHotelFp);
+            }
+            
+            $apiController->response->data->bestPrice = self::getBestPrice($apiController->response->data);
+	    
+            if($apiController->request->hotelId === "business:19840819"){
+	    	//$apiController->response->data = json_decode('{"hotelId":"2675","hotelName":"Merapi Merbabu Hotels  Resorts Yogyakarta","rating":4,"hotelRooms":1,"address1":"Jalan Seturan Raya Depok Sleman Yogyakarta Indonesia 5528 Seturan  ","address2":"Jalan Seturan Raya Depok Sleman Yogyakarta Indonesia 5528 Seturan  ","latitude":-7.7713885,"longitude":110.40958,"description":"Jalan Seturan Raya Depok Sleman Yogyakarta Indonesia 5528 Seturan  ","images":[{"value":"Eksterior","path":"https:\/\/tiket.com\/img\/business\/m\/e\/business-merapimerbabuhotelsampresortsyogyakarta-hotel-yogyakarta2826.l.jpg"}],"facility":[{"value":"sport","name":"Kolam Renang di Dalam Ruangan"}],"rooms":[{"TotalAmount":492000,"Amount":492000,"IdBillerRoom":167,"TaxAmount":0,"RoomInformation":{"RoomTypeImageUrl":"https:\/\/tiket.com\/img\/business\/d\/e\/business-deluxe-merapimerbabuhotelsresortsyogyakarta-yogyakarta4047.l.jpg","MaxOccupancy":2,"Id":"212964320180727--2129643","Name":"Deluxe"},"RateInformation":{"IsIncludeBreakfast":true,"Name":"Deluxe"},"Allotment":1,"TypeName":"Deluxe","CatgId":"212964320180727","InternalCode":"startdate#s#2018-07-27#n#night#s#1#n#room#s#1#n#adult#s#1#n#child#s#0#n#minstar#s#0#n#maxstar#s#0#n#minprice#s#0#n#maxprice#s#0#n#facilities#s#0#n#locations#s#0#n#hotelname#s#0#n#is_partner#s#0#n#room_id#s#2129643#n#hasPromo#s#0#n#enddate#s#2018-07-28#n#room_max_occupancy#s#2","IsBookable":true,"RoomPolicy":[]}],"bestPrice":492000}');
+                $images = $apiController->response->data->images;
+                $fasilities = $apiController->response->data->facility;
+                $apiController->response->data->images = array($images[0]);
+                $apiController->response->data->facility = array($fasilities[0]);
+            }
+            
+        }
+        
+        $apiController->response->setStatus($rc, $rc == "00" ? "Sukses" : $rd);
+    }
+    
+    public static function getBestPrice($data)
+    {
+        $price = 0;
+        
+        foreach ($data->rooms as $value)
+        {
+            if($price == 0)
+            {
+                $price = intval($value->TotalAmount);
+            }
+            else
+            {
+                if($price > intval($value->TotalAmount))
+                {
+                    $price = $value->TotalAmount;
+                }
+            }
+            
+        }
+        
+        return $price;
+    }
+}

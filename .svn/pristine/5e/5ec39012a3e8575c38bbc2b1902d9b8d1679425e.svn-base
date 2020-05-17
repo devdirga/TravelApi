@@ -1,0 +1,70 @@
+<?php
+
+namespace Fastravel\Train;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\Parser\Train\PaymentResponseParser;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\MTI;
+
+use Phalcon\Db;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Train";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::NKAIPAY);
+        $this->setProductCode($this->request->productCode);
+        
+        $message = new TrainMessage($this);
+        
+        $transaksi = $this->db->query("SELECT nominal,nominal_admin,bill_info14 AS discount FROM transaksi WHERE id_produk IN ('WKAI','TKAI') AND bill_info2 = ? ORDER BY time_request LIMIT 1", [$this->request->bookingCode]);
+        $transaksi->setFetchMode(Db::FETCH_OBJ);
+        $data = $transaksi->fetch();
+        $nominal = intval($data->nominal);
+        $nominal_admin = intval($data->nominal_admin);
+        $discount = intval($data->discount);
+        
+        $message->set(TrainMessage::FIELD_ID_PEL2, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_NOMINAL,$nominal);
+        $message->set(TrainMessage::FIELD_NOMINAL_ADMIN,$nominal_admin);
+        
+        $message->set(TrainMessage::FIELD_LOKET_ID,$this->getOutletId());
+        $message->set(TrainMessage::FIELD_PIN,$this->getPin());
+        $message->set(TrainMessage::FIELD_TOKEN,$this->getKey());
+        
+        $message->set(TrainMessage::FIELD_TRX_ID,$this->request->transactionId);
+        
+        $message->set(TrainMessage::FIELD_BOOK_CODE, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_NORMAL_SALES, $nominal);
+        $message->set(TrainMessage::FIELD_EXTRA_FEE, $nominal_admin);
+        if(isset($this->request->pay_type))
+        {
+            $message->set(TrainMessage::FIELD_PAY_TYPE, $this->request->pay_type);
+        }
+        else
+        {
+            $message->set(TrainMessage::FIELD_PAY_TYPE, "TUNAI");
+        }        
+        $message->set(TrainMessage::FIELD_REVENUE, $nominal);
+        $message->set(TrainMessage::FIELD_SEAT_MAP_NULL, $discount);
+        $message->set(TrainMessage::FIELD_REFUND, $discount);
+        //$message->set(TrainMessage::, $value)
+
+        $this->request->simulateSuccess = $this->config->environment;
+        
+        if(!$this->request->simulateSuccess)
+        {
+            if(!Utility::isTesterOutlet($this->getOutletId()))
+            {
+                $this->sendToCore($message);
+            }
+            
+        }
+        
+        PaymentResponseParser::instance()->parse($message)->into($this);
+    }
+}

@@ -1,0 +1,28 @@
+<?php
+
+namespace Fastravel\Libraries;
+
+class ProductCode
+{
+    const NKAI = "NKAI";
+    const PESAWAT = "PESAWAT";
+    const KERETA = "KERETA";
+    const WISATA = "WISATA";
+    const HOTEL = "HOTEL";
+    const KAPAL = "KAPAL";
+    const TRAVEL = "TRAVEL";
+    const RAILINK = "RAIL";
+    
+    const TOPUP = "TOPUP";
+    const TIKET = 'TIKET';
+    const MANDIRI24 = "MANDIRI-24";
+    const BCA24 = "BCA-24";
+    const BNI24 = "BNI-24";
+    const BRI24 = "BRI-24";
+    const BANK24 = array('MANDIRI-24','BCA-24','BNI-24','BRI-24');
+    
+    
+    
+    
+    
+}

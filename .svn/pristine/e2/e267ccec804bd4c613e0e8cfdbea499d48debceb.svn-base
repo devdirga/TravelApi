@@ -1,0 +1,43 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Wisata;
+
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\APIController;
+
+class BookResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * TravelBus message response from core.
+     * 
+     * @var WisataMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {   
+        $rc = $this->message->get(WisataMessage::FIELD_STATUS);
+        $rd = $this->message->get(WisataMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            $apiController->response->setDataAsObject();
+            
+            $iteneraryQuery = $apiController->db->query("select nama_itinerary as title,detail_itinerary as content from paket_wisata_2_data_itinerary where id_destinasi=? order by urutan asc", [$apiController->request->idDestinasi]);
+            
+            $apiController->response->data->bookCode = $this->message->get(WisataMessage::FIELD_REFERENCE_NUMBER);
+            $apiController->response->data->paymentCode = $this->message->get(WisataMessage::FIELD_REFERENCE_NUMBER);
+            $apiController->response->data->nominal = $this->message->get(WisataMessage::FIELD_NOMINAL);
+            $apiController->response->data->nominalAdmin = $this->message->get(WisataMessage::FIELD_NOMINAL_ADMIN);
+            $apiController->response->data->idTransaksi = $this->message->get(WisataMessage::FIELD_TRX_ID);
+            $apiController->response->data->itenerary = $iteneraryQuery->fetch();
+            
+        }
+        
+        $apiController->response->setStatus($rc, $rd);
+        
+        
+    }
+}

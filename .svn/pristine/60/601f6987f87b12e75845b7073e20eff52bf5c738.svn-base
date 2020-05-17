@@ -1,0 +1,308 @@
+<?php
+
+namespace Fastravel\Libraries;
+
+use Phalcon\DI;
+
+class HttpConnect
+{
+    public static function send($message, $timeout = 210)
+    {
+        $curl = curl_init();
+        
+        $di = DI::getDefault();
+        $config = $di->get("config");
+        if(strpos($message,"*FA22044*") !== false || strpos($message,"*FA32670*") !== false || strpos($message,"*FT1013*") !== false){
+            curl_setopt($curl, CURLOPT_URL, '10.0.0.20/FMSSWeb/mpin1');
+            curl_setopt($curl, CURLOPT_PORT,'21080');
+        }else if((preg_match('/\FA32670*\b/', $message) or preg_match('/\FT1013*\b/', $message)) and preg_match('/\TKAI*\b/', $message)) {
+            curl_setopt($curl, CURLOPT_URL, '10.0.0.20/FMSSWeb/mpin1');
+            curl_setopt($curl, CURLOPT_PORT,'21080');
+        }else{
+            curl_setopt($curl, CURLOPT_URL, $config->app->ipAddress . $config->app->path);
+            curl_setopt($curl, CURLOPT_PORT, $config->app->port);
+        }
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 240); //210
+        curl_setopt($curl, CURLOPT_TIMEOUT, 240); //$timeout
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        curl_setopt($curl, CURLOPT_POST, TRUE);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        $response = curl_exec($curl);
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+        curl_close($curl);
+        
+        $object = new \stdClass();
+        
+        $object->response = $response; 
+        $object->rc = $rc;
+        $object->rd = $rd;
+        
+        return $object;
+    }
+    
+    
+    public static function sendDevel($message, $timeout = 210)
+    {
+        $curl = curl_init();
+        
+        ini_set('display_errors', 1);
+        ini_set('display_startup_errors', 1);
+        error_reporting(E_ALL);
+        
+        $di = DI::getDefault();
+        $ipdadress = '10.0.0.20' ;
+        $apppath = '/FMSSWeb/mpin1' ;
+        $port = '21080' ;
+        
+        curl_setopt($curl, CURLOPT_URL, $ipdadress . $apppath);
+        curl_setopt($curl, CURLOPT_PORT, $port);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 240); //210
+        curl_setopt($curl, CURLOPT_TIMEOUT, 240); //$timeout
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        curl_setopt($curl, CURLOPT_POST, TRUE);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        
+        $response = curl_exec($curl);
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+        
+        curl_close($curl);
+        
+        $object = new \stdClass();
+        
+        $object->response = $response; 
+        $object->rc = $rc;
+        $object->rd = $rd;
+        
+        return $object;
+    }
+    
+    public static function sendToURL($url, $port,$message="", $method="POST", $timeout = 210)
+    {
+        $curl = curl_init();
+        
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_PORT, $port);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 210); 
+        curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        
+        if($method == "POST"){
+            curl_setopt($curl, CURLOPT_POST, TRUE);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        }
+        
+        $response = curl_exec($curl);
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+        
+        curl_close($curl);
+        
+        $object = new \stdClass();
+        
+        $object->response = $response; 
+        $object->rc = $rc;
+        $object->rd = $rd;
+        
+        return $object;
+    }
+    
+    public static function sendToGETAPI($url) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 210);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 500);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        $result = curl_exec($ch);
+        curl_close($ch);
+        return $result;
+    }
+    
+    public static function sendBank24($msg, $typeBank) {
+        if ($typeBank === 'MANDIRI-24' || $typeBank === 'BCA-24') {
+            $fp = fsockopen('10.0.0.38', '14001');
+            if (!$fp) {
+                return "Error\n";
+            } else {
+                fputs($fp, "POST " . '/interface/index_atm_bca.php' . " HTTP/1.0\r\n");
+                fputs($fp, "Connection: close\r\n");
+                fputs($fp, "Content-Type: application/x-www-form-urlencoded\r\n");
+                fputs($fp, "Content-Length: " . strlen($msg) . "\r\n\r\n");
+                fputs($fp, $msg);
+                while (!feof($fp)) {
+                    $reply[] = fgets($fp, 12000);
+                }
+                fclose($fp);
+                return $reply[9];
+            }
+        } else if ($typeBank === 'BNI-24' || $typeBank === 'BRI-24') {
+            $c = curl_init();
+            curl_setopt($c, CURLOPT_URL, 'http://10.0.0.38/interface/index_atm_bca.php');
+            curl_setopt($c, CURLOPT_POSTFIELDS, $msg);
+            curl_setopt($c, CURLOPT_PORT, 14001);
+            curl_setopt($c, CURLOPT_POST, true);
+            curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($c, CURLOPT_TIMEOUT, 30);
+            curl_setopt($c, CURLOPT_CONNECTTIMEOUT, 30);
+            $d = curl_exec($c);
+            $en = curl_errno($c);
+            curl_close($c);
+            return ($en > 0) ? null : $d;
+        } else {
+            return self::sendBankNon24($msg);
+        }
+    }
+
+    public static function sendBankNon24($message, $timeout = 60) {
+        $curl = curl_init();
+        $di = DI::getDefault();
+        $config = $di->get("config");
+        curl_setopt($curl, CURLOPT_URL, $config->app->ipAddress . $config->app->path);
+        curl_setopt($curl, CURLOPT_PORT, $config->app->port);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 60);
+        curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        curl_setopt($curl, CURLOPT_POST, TRUE);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        $response = curl_exec($curl);
+        $rc = curl_errno($curl);
+        curl_close($curl);
+        return ($rc > 0) ? null : $response;
+    }
+
+    public static function sendSms($msg) {
+        $c = curl_init();
+        curl_setopt($c, CURLOPT_URL, 'http://10.0.0.46/sms_multibiller_mp/');
+        curl_setopt($c, CURLOPT_TIMEOUT, 60);
+        curl_setopt($c, CURLOPT_CONNECTTIMEOUT, 500);
+        curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($c, CURLOPT_POSTFIELDS, $msg);
+        $r = curl_exec($c);
+        curl_close($c);
+        return (empty(json_decode($r)->rc)) ? true : false;
+    }
+    
+    public static function sendToSecureAPI($url) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 210);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 500);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+        $result = curl_exec($ch);
+        curl_close($ch);
+        return $result;
+    }
+    
+    
+    public static function sendToElastic($message, $method) {
+        $url = "http://10.0.76.27:2000/" . $method;
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($message))
+        );
+
+        $response = curl_exec($curl);
+
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+
+        curl_close($curl);
+
+        $object = new \stdClass();
+
+        $object->response = ($response);
+        $object->rc = $rc;
+        $object->rd = $rd;
+
+        return $object;
+    }
+
+    public static function sendToLionBiller($message, $timeout = 210) {
+        $curl = curl_init();
+
+        curl_setopt($curl, CURLOPT_URL, "http://10.0.0.34:25080" . "/LionAPIBiller/?" . ($message) );
+        //curl_setopt($curl, CURLOPT_PORT, 25080); //8088
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 240); //210
+        curl_setopt($curl, CURLOPT_TIMEOUT, 240); //$timeout
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        //curl_setopt($curl, CURLOPT_POST, FALSE);
+        //curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+
+        $response = curl_exec($curl);
+        
+
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+
+        curl_close($curl);
+
+        $object = new \stdClass();
+
+        $object->response = $response;
+        $object->rc = $rc;
+        $object->rd = $rd;
+
+        return $object;
+    }
+
+    /*
+     * Universal POST/GET send to Core
+     *  
+     * */
+
+    public static function sendToCore($method, $server, $port, $path, $message, $timeout = 240) { //methode TRUE = POST
+        
+        $curl = curl_init();
+
+        if ($method) {
+            curl_setopt($curl, CURLOPT_URL, $server . ":" . $port . $path);
+        }
+        else {
+            curl_setopt($curl, CURLOPT_URL, $server . ":" . $port . $path . ($message) );
+        }
+        curl_setopt($curl, CURLOPT_PORT, intval($port));
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, $timeout);
+        curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($curl, CURLOPT_HEADER, FALSE);
+        if ($method) {
+            curl_setopt($curl, CURLOPT_POST, TRUE);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $message);
+        }
+        else {
+            curl_setopt($curl, CURLOPT_POST, FALSE);
+        }
+        
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($message))
+        );
+        
+        $response = curl_exec($curl);
+        
+        $rc = curl_errno($curl);
+        $rd = curl_error($curl);
+
+        curl_close($curl);
+
+        $object = new \stdClass();
+
+        $object->response = $response;
+        $object->rc = $rc;
+        $object->rd = $rd;
+
+        return $object;
+    }
+}

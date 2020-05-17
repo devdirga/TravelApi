@@ -1,0 +1,94 @@
+<?php
+
+namespace Fastravel\Hotel;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\Parser\Hotel\SearchResponseParser;
+use Fastravel\Libraries\MTI;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search Hotel";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::HOTELADM);
+        $this->setProductCode("RHOTEL");
+        
+        $message = new HotelMessage($this);
+        
+        $message->set(HotelMessage::FIELD_CMD, "SearchHotel");
+        
+        $message->set(HotelMessage::FIELD_PAX_PASSPORT, "IDN");
+        $message->set(HotelMessage::FIELD_DEST_COUNTRY, "IDN");
+        
+        if(isset($this->request->hotelId))
+        {
+            $this->request->hotelId = self::replacement($this->request->hotelId);
+        }
+        
+        if(isset($this->request->cityId))
+        {
+            $this->request->cityId = self::replacement($this->request->cityId);
+        }
+        
+        if(isset($this->request->hotelId))
+        {
+            $message->set(HotelMessage::FIELD_HOTEL_ID, $this->request->hotelId);
+        }
+        
+        if(isset($this->request->cityId))
+        {
+            $message->set(HotelMessage::FIELD_DEST_CITY, $this->request->cityId);
+            
+            /*
+            if( strpos($this->request->cityId, 'province') !== false )
+            {   
+                $message->set(HotelMessage::FIELD_HOTEL_ID, $this->request->cityId);
+                $message->set(HotelMessage::FIELD_DEST_CITY, '');
+            } 
+            */
+        }
+        
+        $message->set(HotelMessage::FIELD_ROOM_COUNT, $this->request->room);
+        $message->set(HotelMessage::FIELD_GUEST_COUNT, $this->request->guest);
+        $message->set(HotelMessage::FIELD_PERIOD_CHECKIN, $this->request->checkInDate);
+        //$message->set(HotelMessage::FIELD_PERIOD_CHECKOUT, $this->request->checkOutDate);
+        if(isset($this->request->durasi))
+        {
+            $date = new \DateTime(HotelMessage::FIELD_PERIOD_CHECKIN, $this->request->checkInDate);
+            $durations = intval($this->request->durasi);
+            $date->modify("+$durations day");
+            $message->set(HotelMessage::FIELD_PERIOD_CHECKOUT, $date->format("Y-m-d"));
+        }
+        else
+        {
+            $message->set(HotelMessage::FIELD_PERIOD_CHECKOUT, $this->request->checkOutDate);
+        }
+        
+        $message->set(HotelMessage::FIELD_PERIOD_ROOM_INFO, '[{"AdultNum":{"RoomType":"","RQBedChild":"N","content":"2"},"ChildAges":""}]');
+
+        $this->sendToCore($message);
+        
+        SearchResponseParser::instance()->parse($message)->into($this);
+    }
+    
+    public static function replacement($keyword)
+    {
+        $replacement = array(
+            'province:16' => 'city:257',
+            'city:21681' => 'jakarta',
+            'city:21720' => 'bali'
+        );
+
+        if (array_key_exists($keyword, $replacement))
+        {
+            return $replacement[$keyword];
+        }
+        else
+        {
+            return $keyword;
+        }
+    }
+}

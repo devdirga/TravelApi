@@ -1,0 +1,63 @@
+<?php
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Lists\ListPESAWAT;
+use Fastravel\Libraries\Lists\ListHOTEL;
+use Fastravel\Libraries\Lists\ListKERETA;
+use Fastravel\Libraries\Lists\ListWISATA;
+use Fastravel\Libraries\Lists\ListTRAVEL;
+use Fastravel\Libraries\Lists\ListKAPAL;
+use Fastravel\Libraries\ProductCode;
+
+
+class   TransactionStatusResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+
+    public function into(APIController $apiController)
+    {
+       
+        
+        $apiController->response->setDataAsObject();
+        
+        switch ($apiController->request->product) 
+        {   
+            case ProductCode::PESAWAT:
+                $additionaldata = (new ListPESAWAT())->initStatus($apiController->request->bookCode);
+                break;
+            case ProductCode::KERETA:
+                
+                $additionaldata = (new ListKERETA())->initStatus($apiController->request->bookCode);
+                break;
+            case ProductCode::HOTEL:
+                $additionaldata = (new ListHOTEL())->initStatus($apiController->request->bookCode);
+                break;
+            case ProductCode::KAPAL:
+                $additionaldata = (new ListKAPAL())->initStatus($apiController->request->bookCode);
+                break;
+            case ProductCode::WISATA:
+                $additionaldata = (new ListWISATA())->initStatus($apiController->request->bookCode);                
+                break;
+            case ProductCode::TRAVEL:
+                $additionaldata = (new ListTRAVEL())->initStatus($apiController->request->bookCode);
+                break;
+            default :
+                $apiController->response->setStatus("01", "Product Code Salah");
+                $additionaldata = new \stdClass;
+                break;
+        }
+        
+        $apiController->response->data = $additionaldata;       
+
+    }
+}
+

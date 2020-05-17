@@ -1,0 +1,47 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Models\Slide;
+
+class SlidesResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+//        $slides = Slide::find("isActive = 1");
+        $slides = Slide::find(array(
+            'conditions' => 'isActive = ?1 AND app = ?2',
+            'bind' => array(
+                1 => 1,
+                2 => "B2B-MOBILE"
+            )  
+        ));
+        if(count($slides) > 0) 
+        {
+            foreach($slides as $slide)
+            {
+                $object = new \stdClass();
+                $object->product = $slide->produk;
+                $object->path = $apiController->config->app->cdn . $slide->path;
+                $object->url = $slide->url;
+                
+                $apiController->response->data[] = $object;
+            }
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "Slide empty.");
+        }
+    }
+}

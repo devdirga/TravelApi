@@ -1,0 +1,414 @@
+<?php
+
+namespace Fastravel\Libraries;
+
+use Fastravel\Libraries\APIController;
+use Phalcon\Db;
+
+class Utility 
+{
+    public static $pattern = array(
+        '/Mon[^day]/', '/Tue[^sday]/', '/Wed[^nesday]/', '/Thu[^rsday]/',
+        '/Fri[^day]/', '/Sat[^urday]/', '/Sun[^day]/', '/Monday/', '/Tuesday/',
+        '/Wednesday/', '/Thursday/', '/Friday/', '/Saturday/', '/Sunday/',
+        '/Jan[^uary]/', '/Feb[^ruary]/', '/Mar[^ch]/', '/Apr[^il]/', '/May/',
+        '/Jun[^e]/', '/Jul[^y]/', '/Aug[^ust]/', '/Sep[^tember]/', '/Oct[^ober]/',
+        '/Nov[^ember]/', '/Dec[^ember]/', '/January/', '/February/', '/March/',
+        '/April/', '/June/', '/July/', '/August/', '/September/', '/October/',
+        '/November/', '/December/',
+    );
+    
+    public static $replace = array('Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min',
+        'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+        'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des',
+        'Januari', 'Februari', 'Maret', 'April', 'Juni', 'Juli', 'Agustus', 'September',
+        'Oktober', 'November', 'Desember',
+    );
+    
+    public static function getPattern(){
+        return self::$pattern;
+    }
+    
+    public static function getReplace(){
+        return self::$replace;
+    }
+    
+    public static function getAirline(APIController $apiController)
+    {
+        $airline = $apiController->db->fetchOne("SELECT nama_maskapai, url_icon FROM status_maskapai WHERE kode_maskapai = ?", Db::FETCH_OBJ, [$apiController->request->airline]);
+        
+        return $airline;
+    }
+    
+    public static function getMid(APIController $apiController)
+    {
+        $mid = (object) $apiController->db->fetchOne("SELECT nextval('message_mid_seq') AS mid");
+        
+        return $mid->mid;
+    }
+    
+    public static function getAirport(APIController $apiController, $airport)
+    {
+        $item = $apiController->db->fetchOne("SELECT city_name, timezone FROM mt_destination WHERE city_code = ?", Db::FETCH_OBJ, [$airport]);
+        
+        return $item;
+    }
+    
+    public static function getAirportDetail($airport, $airports)
+    {        
+        return array_key_exists($airport, $airports) ? $airports[$airport] : null;
+    }
+    
+    public static function getAirports(APIController $apiController)
+    {
+        $result = $apiController->db->fetchAll("SELECT city_code, city_name, timezone FROM mt_destination WHERE is_active = 1", Db::FETCH_OBJ);
+        
+        $items = array();
+        
+        foreach($result as $item)
+        {
+            $object = new \stdClass();
+            $object->city_name = $item->city_name;
+            $object->timezone = $item->timezone;
+            
+            $items[$item->city_code] = $object;
+        }
+        
+        return $items;
+    }
+    
+    public static function getDuration($classes, $departureDate)
+    {
+        //$classes[0][0]->depatureTime
+        
+        $departureTimeFirst = new \DateTime($departureDate . " " . self::getDepartureTime($classes) . ":00");
+        $departureTimeLast = new \DateTime(self::getArrivalDate($classes, $departureDate) . " " . $classes[count($classes) - 1][0]->arrivalTime . ":00");
+        
+//        $departureTimeFirst->modify("+" . intval($classes[0][0]->departureTimeZone) . " hour");
+//        $departureTimeLast->modify("+" . intval($classes[count($classes) - 1][0]->arrivalTimeZone) . " hour");
+//        
+//        $departureTimeFirst->modify("+" . explode(".", $classes[0][0]->departureTimeZone)[1] . " minute");
+//        $departureTimeLast->modify("+" . explode(".", $classes[count($classes) - 1][0]->arrivalTimeZone)[1] . " minute");
+        
+        $different = $departureTimeFirst->diff($departureTimeLast);
+        
+        return $different->h . "j" . $different->i . "m";
+    }
+    
+    public static function getDuration2($departureDate,$depatureTime,$arrivalTime,$timeZoneFirst,$timeZoneLast){
+        
+        $departureTimeFirst = new \DateTime($departureDate . " " . $depatureTime . ":00");
+        $departureTimeLast = new \DateTime(self::getArrivalDate2($depatureTime,$departureDate) . " " . $arrivalTime . ":00");
+        
+        $departureTimeFirst->modify("+" . intval(explode(".", $timeZoneFirst)[0]) . " hour");
+        $departureTimeLast->modify("+" . intval(explode(".", $timeZoneLast)[0]) . " hour");
+        
+        $departureTimeFirst->modify("+" . explode(".", $timeZoneLast)[1] . " minute");
+        $departureTimeLast->modify("+" . explode(".", $timeZoneLast)[1] . " minute");
+        
+        $different = $departureTimeFirst->diff($departureTimeLast);
+        
+        return $different->h . "j " . $different->i . "m";
+    }
+    
+    public static function getArrivalDate($classes, $departureDate)
+    {
+        //$classes[0][0]->depatureTime
+        $departureTimeFirst = strtotime($departureDate . " " . self::getDepartureTime($classes) . ":00");
+        $departureTimeLast = strtotime($departureDate . " " . $classes[count($classes) - 1][0]->depatureTime . ":00");
+        
+        $date = new \DateTime($departureDate);
+        
+        if($departureTimeFirst > $departureTimeLast)
+        {
+            $date->modify("+1 day");
+        }
+        
+        return $date->format("Y-m-d") ;
+    }
+    
+    public static function getArrivalDate2($depatureTime,$departureDate){
+        
+        $departureTimeFirst = strtotime($departureDate . " " . $depatureTime . ":00");
+        $departureTimeLast = strtotime($departureDate . " " . $depatureTime . ":00");
+        
+        $date = new \DateTime($departureDate);
+        
+        if($departureTimeFirst >= $departureTimeLast)
+        {
+            $date->modify("+1 day");
+        }
+        
+        return $date->format("Y-m-d") ;
+        
+    }
+    
+    
+    public static function getTrainDuration($departureDate,$depatureTime,$arrivalTime){
+        $departureTimeFirst = new \DateTime($departureDate . " " . $depatureTime . ":00");
+        $depTimeFirst = strtotime($departureDate . " " . $depatureTime . ":00");
+        $depTimeLast = strtotime($departureDate . " " . $depatureTime . ":00");
+        $date = new \DateTime($departureDate);
+        if($depTimeFirst >= $depTimeLast){
+            $date->modify("+1 day");
+        }
+        $departureTimeLast = new \DateTime($date->format("Y-m-d") . " " . $arrivalTime . ":00");
+        $different = $departureTimeFirst->diff($departureTimeLast);
+        return $different->h . "j " . $different->i . "m";
+    }
+    
+   
+    
+    public static function getTimeZoneRepresentation($timeZoneValue)
+    {
+        if(intval($timeZoneValue) == 7)
+        {
+            return "WIB";
+        }
+        else if(intval($timeZoneValue) == 8)
+        {
+            return "WITA";
+        }
+        else if(intval($timeZoneValue) == 9)
+        {
+            return "WIT";
+        }
+        else
+        {
+            return $timeZoneValue;
+        }
+    }
+    public function getBookExpiredTime($produk)
+    {
+        switch ($produk){
+        case ProductCode::PESAWAT:         
+            $expiredTime = \date("Y-m-d H:i:s");            
+        break;
+        case ProductCode::KERETA:
+            $expiredTime = "10 minute";            
+        break;
+        case ProductCode::WISATA:
+        case ProductCode::HOTEL: 
+        case ProductCode::KAPAL: 
+        case ProductCode::TRAVEL:
+        default:
+//            $expiredHours = 2;
+//            $expiredTime = \date("Y-m-d H:i:s",\strtotime(\date("Y-m-d H:i:s")." - ".$expiredHours." hours"));
+            $expiredTime = "2 hour";            
+        break;
+        }
+        //die($expiredTime);
+        return $expiredTime;
+        
+    }
+    
+    public static function getKomisi(APIController $apiController, $id_transaksi)
+    {
+        
+         $o = $apiController->db->query("SELECT getTravelCommission(?) as komisi", [$id_transaksi]);
+         
+         $o->setFetchMode(Db::FETCH_OBJ);
+         
+         $data = $o->fetch();
+         
+         return $data->komisi;
+    }
+    
+    public static function sanitizeFlightTitle($title){
+        $result = "";
+        
+        if(substr($title, 0, 2) == "SJ"){
+            //
+            //
+            //SJ 235 SUB JOG 16:45-17:40 > SJ 235 JOG CGK 18:25-19:35 --> transit
+            //JT708 SUB UPG 05:25-07:55 > JT891 UPG CGK 08:25-09:50 --> langsung
+            $idx = 0;
+            $titleData = explode(" ", $title);
+            foreach($titleData as $data){
+                $result .= $data;
+                if($idx > 0){
+                        $result .= " ";
+                }
+                $idx++;
+                if($data == ">"){
+                        $idx = 0;
+                }
+            }
+        }else{
+	    $result = $title;	
+	}
+        return $result;
+    }
+    
+    public static function getFullDate($strdate,$time){
+        $timestamp = strtotime($strdate);    
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("l", $timestamp) . "," . date("d", $timestamp)." ". date("F", $timestamp)." ".date("Y", $timestamp). " ". substr($time, 0,2). ":" .substr($time, 2,2) );
+    }
+    
+    public static function getFullDate_time($strdate,$time){
+        $timestamp = strtotime($strdate);    
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("l", $timestamp) . "," . date("d", $timestamp)." ". date("F", $timestamp)." ".date("Y", $timestamp) );
+    }
+    
+    public static function getDay($strdate){
+        $timestamp = strtotime($strdate);
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("l", $timestamp));
+    }
+    
+    public static function getPassengerKereta($value) {
+        $penumpang = array();
+        $list_penumpang = array( $value->bill_info20,
+            $value->bill_info24,
+            $value->bill_info28,
+            $value->bill_info32
+        );
+        for ($i=0;$i <= 3;$i++){
+            if(!$list_penumpang[$i])
+            break;
+        $penumpang[$i] = array("nama" => $list_penumpang[$i]);
+        }
+        return $penumpang;
+    }
+    
+    public static function isPartner($outletId){
+        return substr($outletId,0,2) == "HH";
+    }
+    
+    public static function camelizeWords($words){
+        return ucwords(strtolower($words));        
+    }
+    
+    public static function getProcessingTime($startTime){
+        return (microtime(TRUE) - $startTime) . " Second";        
+    }
+    
+    public static function getRangePax($data) {
+        
+//        $arr_daftar_harga = array(
+//            array("harga" => $data['custom_harga_1'], "range_min" => "1", "range_max" => "1", "key" => "custom_harga_1"),
+//            array("harga" => $data['custom_harga_2'], "range_min" => "2", "range_max" => "2", "key" => "custom_harga_2"),
+//            array("harga" => $data['custom_harga_3'], "range_min" => "3", "range_max" => "4", "key" => "custom_harga_3"),
+//            array("harga" => $data['custom_harga_4'], "range_min" => "5", "range_max" => "6", "key" => "custom_harga_4"),
+//            array("harga" => $data['custom_harga_5'], "range_min" => "7", "range_max" => "10", "key" => "custom_harga_5"),
+//            array("harga" => $data['custom_harga_6'], "range_min" => "11", "range_max" => "15", "key" => "custom_harga_6"),
+//            array("harga" => $data['custom_harga_7'], "range_min" => "16", "range_max" => "24", "key" => "custom_harga_7"),
+//            array("harga" => $data['custom_harga_8'], "range_min" => "25", "range_max" => "44", "key" => "custom_harga_8")
+//        );
+        
+        $priceData = $data[0];
+        $result = range(1,44);
+        
+        if($priceData->custom_harga_1 == 0 || $priceData->custom_harga_1 == "")
+        {
+            unset($result[0]);
+        }
+        if($priceData->custom_harga_2 ==0 || $priceData->custom_harga_2 == ""){
+            unset($result[1]);
+        }
+        if($priceData->custom_harga_3 ==0 || $priceData->custom_harga_3 == ""){
+            Utility::unsetRange($result,2,3);
+        }
+        if($priceData->custom_harga_4 ==0 || $priceData->custom_harga_4 == ""){
+            Utility::unsetRange($result,4,5);
+        }
+        if($priceData->custom_harga_5 ==0 || $priceData->custom_harga_5 == ""){
+            Utility::unsetRange($result,6,9);
+        }
+        if($priceData->custom_harga_6 ==0 || $priceData->custom_harga_6 == ""){
+            Utility::unsetRange($result,10,14);
+        }
+        if($priceData->custom_harga_7 ==0 || $priceData->custom_harga_7 == ""){
+            Utility::unsetRange($result,15,23);
+        }
+        if($priceData->custom_harga_8 ==0 || $priceData->custom_harga_8 == ""){
+            Utility::unsetRange($result,24,44);
+        }
+        
+        $finalresult=array();
+        
+        foreach ($result as $value) {
+            
+            $finalresult[] = (string) $value;
+            
+        }
+        
+        return  $finalresult;
+    }
+    
+    public static function unsetRange(&$result,$bottom,$top){
+        for($idx=$bottom;$idx<=$top;$idx++){
+            unset($result[$idx]);
+        }
+    }
+    
+    public static function isTesterOutlet($outletID){
+        return ($outletID == "FA87289" || substr($outletID,0,2) == "HH") ? true : false;
+    }
+    
+    public static function getDepData($startDate){
+        
+        $arr = explode("-", $startDate);
+        if(strlen($arr[1])===3){
+            return $arr[0]."-".substr($arr[1], 1,2)."-".$arr[2];
+        }else{
+            return $startDate;
+        }
+        
+    }
+    
+    public static function getArvDate($startDate,$duration){
+        $arrDuration = explode("D", $duration);
+        $intDuration = intval($arrDuration[0]);
+        $t1 = ' +'.$intDuration.' day';
+        $stop_date = date('Y-m-d', strtotime($startDate . $t1));
+        return $stop_date;
+    }
+    
+    public static function getProductName($apiController, $idProduct) {
+        $d = $apiController->db->query("select produk from mt_produk where id_produk = ? limit 1", [$idProduct]);
+        $d->setFetchMode(Db::FETCH_OBJ);
+        $dt = $d->fetch();
+        return $dt->produk;
+    }
+    
+    public static function getListPrice($data){
+        
+        $result = array();
+        
+        if(intval($data->custom_harga_1)!==0){
+            $result[] = array("1",$data->custom_harga_1) ;
+        }
+        if(intval($data->custom_harga_2)!==0){
+            $result[] = array("2",$data->custom_harga_2);
+        }
+        if(intval($data->custom_harga_3)!==0){
+            $result[] = array("3-4",$data->custom_harga_3);
+        }
+        if(intval($data->custom_harga_4)!==0){
+            $result[] = array("5-6",$data->custom_harga_4);
+        }
+        if(intval($data->custom_harga_5)!==0){
+            $result[] = array("7-10",$data->custom_harga_5);
+        }
+        if(intval($data->custom_harga_6)!==0){
+            $result[] = array("11-15",$data->custom_harga_6);
+        }
+        if(intval($data->custom_harga_7)!==0){
+            $result[] = array("16-24",$data->custom_harga_7);
+        }
+        if(intval($data->custom_harga_8)!==0){
+            $result[] = array("25-44",$data->custom_harga_8);
+        }
+        return $result;
+        
+    }
+    
+    public static function getDepartureTime($classes) {
+        foreach ($classes as $value) {
+            if (sizeof($value) > 0) {
+                return $value[0]->depatureTime;
+            }
+        }
+    }
+    
+}

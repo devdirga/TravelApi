@@ -1,0 +1,50 @@
+<?php
+
+namespace Fastravel\Flight;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\Parser\Flight\BaggageResponseParser;
+use Fastravel\Libraries\MTI;
+
+class BaggageController extends APIController
+{
+    protected $invoking = "Baggage Flight";
+
+    public function indexAction()
+    {
+        $this->setMTI(MTI::RESERVATION);
+        $this->setProductCode($this->request->airline);
+  
+        $message = new FlightMessage($this);
+        
+        $message->set(FlightMessage::FIELD_FLIGHT_STEP, "BAGGAGE");
+        $message->set(FlightMessage::FIELD_INDEX, date("YmdHis"));
+        $message->set(FlightMessage::FIELD_MASKAPAI, $this->request->maskapai);
+        $message->set(FlightMessage::FIELD_RUTE, 0);
+        
+        $message->set(FlightMessage::FIELD_LOKET_ID, "BS0004");
+        $message->set(FlightMessage::FIELD_PIN, "141414");
+        $message->set(FlightMessage::FIELD_TOKEN, "FASTPAY");
+        
+        $time = strtotime(date('m/d/Y'));
+        $time = strtotime("+7 day", $time); 
+        $date = date('m/d/Y',$time);
+        
+        $message->set(FlightMessage::FIELD_CITY_ORIGIN, $this->request->departure);
+        $message->set(FlightMessage::FIELD_CITY_DESTINATION, $this->request->arrival);
+        $message->set(FlightMessage::FIELD_DATE_DEPARTURE, $date);
+        $message->set(FlightMessage::FIELD_DATE_ARRIVAL, $date);
+        $message->set(FlightMessage::FIELD_COUNT_ADULT, 1);
+        $message->set(FlightMessage::FIELD_COUNT_CHILD, 0);
+        $message->set(FlightMessage::FIELD_COUNT_BABY, 0);      
+        $message->set(FlightMessage::FIELD_PROCESS, "01");
+        
+        //$message->parse('RESERVASI*TPJT*3229643770*5*20190221091844*H2H*BS0004*141414*FASTPAY**BAGGAGE*20190220084553*TPIW*0*SUB*SRG*02/20/2019*02/20/2019*1*0*0*01****************************W01|SUB-SRG|1;W02|SUB-SRG|1;W03|SUB-SRG|1;W04|SUB-SRG|1;W05|SUB-SRG|1;W06|SUB-SRG|1#100000;200000;300000;400000;500000;600000#5;10;15;20;25;30***************************************************00*success');
+         //$this->sendToCore($message);
+         $message->set(FlightMessage::FIELD_ID_PEL1, "TPSW");
+         $this->sendToCoreDevel($message) ;
+
+        BaggageResponseParser::instance()->parse($message)->into($this);
+    }
+}

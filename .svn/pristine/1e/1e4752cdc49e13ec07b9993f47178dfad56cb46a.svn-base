@@ -1,0 +1,52 @@
+<?php
+
+$router = new Phalcon\Mvc\Router(false);
+
+$router->removeExtraSlashes(true);
+
+$router->add('/app/:controller', [
+    'namespace'  => 'Fastravel\App',
+    'controller' => 1
+]);
+
+$router->add('/flight/:controller', [
+    'namespace'  => 'Fastravel\Flight',
+    'controller' => 1
+]);
+
+$router->add('/hotel/:controller', [
+    'namespace'  => 'Fastravel\Hotel',
+    'controller' => 1
+]);
+
+$router->add('/pelni/:controller', [
+    'namespace'  => 'Fastravel\Pelni',
+    'controller' => 1
+]);
+
+$router->add('/tour/:controller', [
+    'namespace'  => 'Fastravel\Tour',
+    'controller' => 1
+]);
+
+$router->add('/train/:controller', [
+    'namespace'  => 'Fastravel\Train',
+    'controller' => 1
+]);
+
+$router->add('/travelbus/:controller', [
+    'namespace'  => 'Fastravel\TravelBus',
+    'controller' => 1
+]);
+
+$router->add('/wisata/:controller', [
+    'namespace'  => 'Fastravel\Wisata',
+    'controller' => 1
+]);
+
+$router->add('/jadipergi/:controller', [
+    'namespace'  => 'Fastravel\Jadipergi',
+    'controller' => 1
+]);
+
+return $router;

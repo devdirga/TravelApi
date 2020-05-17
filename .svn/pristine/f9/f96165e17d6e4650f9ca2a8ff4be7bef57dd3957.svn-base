@@ -1,0 +1,23 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\Parser\App\GenerateAsterikStrukResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+
+class GenerateAsterikStrukController extends APIController
+{
+    public $requestGET;
+    
+    protected $invoking = "Generate Asterik Struk App";
+    
+    public function indexAction()
+    { 
+        
+       $message = new AppMessage($this);
+        
+       GenerateAsterikStrukResponseParser::instance()->parse($message)->into($this);
+        
+    }
+}

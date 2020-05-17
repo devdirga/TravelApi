@@ -1,0 +1,23 @@
+<?php
+
+namespace Fastravel\App;
+
+class ViewLogoController {
+
+    protected $invoking = "View Logo App";
+    
+    public function indexAction() {
+        
+        $url = "http://api.fastravel.co.id/protected/Asset/Img/fastravel.bmp.1";
+        
+        header("Content-type: image/bmp");
+        
+        
+        
+        $file = file_get_contents($url);
+        
+        echo $file;
+        
+    }
+    
+}

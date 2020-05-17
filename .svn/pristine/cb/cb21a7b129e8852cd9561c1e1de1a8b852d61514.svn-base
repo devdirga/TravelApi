@@ -1,0 +1,21 @@
+<?php
+
+namespace Fastravel\Tour;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TourMessage;
+use Fastravel\Libraries\Parser\Tour\SearchResponseParser;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search Tour";
+    
+    public function indexAction()
+    {
+        $message = new TourMessage($this);
+        
+        $this->sendToCore($message);
+        
+        SearchResponseParser::instance()->parse($message)->into($this);
+    }
+}

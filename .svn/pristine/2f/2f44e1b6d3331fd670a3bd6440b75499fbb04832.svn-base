@@ -1,0 +1,52 @@
+<?php
+
+namespace Fastravel\Train;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\Parser\Train\ChangeSeatResponseParser;
+use Fastravel\Libraries\MTI;
+
+class ChangeSeatController extends APIController
+{
+    protected $invoking = "Change Seat Train";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::NKAISEAT);
+        $this->setProductCode($this->request->productCode);
+        
+        $message = new TrainMessage($this);
+        
+        $message->set(TrainMessage::FIELD_ID_PEL2, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_BOOK_CODE, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_TRX_ID, $this->request->transactionId);
+        
+        $message->set(TrainMessage::FIELD_WAGON_CODE, $this->request->wagonCode);
+        $message->set(TrainMessage::FIELD_WAGON_NO, $this->request->wagonNumber);
+        
+        $seats = array();
+        $seatNumbers = array();
+        
+        $i = 0;
+        foreach($this->request->seats as $seat)
+        {
+            $message->set(TrainMessage::FIELD_WAGON_CODE1 + ($i * 4), $this->request->wagonCode);
+            $message->set(TrainMessage::FIELD_WAGON_NO1 + ($i * 4), $this->request->wagonNumber);
+            $message->set(TrainMessage::FIELD_SEAT_ROW1 + ($i * 4), $seat->row);
+            $message->set(TrainMessage::FIELD_SEAT_COL1 + ($i * 4), $seat->column);
+            
+            $seats[] = $seat->row . $seat->column;
+            $seatNumbers[] = $this->request->wagonCode . "-" . $this->request->wagonNumber . "/" . $seat->row . $seat->column;
+            
+            $i++;
+        }
+        
+        $message->set(TrainMessage::FIELD_SEAT, implode(",", $seats));
+        $message->set(TrainMessage::FIELD_SEAT_NUMBER, implode(",", $seatNumbers));
+        
+        $this->sendToCore($message);
+        
+        ChangeSeatResponseParser::instance()->parse($message)->into($this);
+    }
+}

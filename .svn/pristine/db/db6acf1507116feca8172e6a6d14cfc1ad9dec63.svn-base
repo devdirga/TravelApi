@@ -1,0 +1,56 @@
+<?php
+
+namespace Fastravel\Flight;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\Parser\Flight\FareResponseParser;
+use Fastravel\Libraries\MTI;
+use DateTime;
+
+class FareController extends APIController
+{
+    protected $invoking = "Fare Flight";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::RESERVATION);
+        $this->setProductCode($this->request->airline);
+        
+        $message = new FlightMessage($this);
+        
+        $message->set(FlightMessage::FIELD_FLIGHT_STEP, "FARE");
+        $message->set(FlightMessage::FIELD_INDEX, date("YmdHis"));
+        $message->set(FlightMessage::FIELD_MASKAPAI, $this->request->airline);
+        $message->set(FlightMessage::FIELD_RUTE, 0);
+        
+        $departureDate = DateTime::createFromFormat('Y-m-d', $this->request->departureDate);
+        
+        $message->set(FlightMessage::FIELD_CITY_ORIGIN, $this->request->departure);
+        $message->set(FlightMessage::FIELD_CITY_DESTINATION, $this->request->arrival);
+        $message->set(FlightMessage::FIELD_DATE_DEPARTURE, $departureDate->format('m/d/Y'));
+        $message->set(FlightMessage::FIELD_DATE_ARRIVAL, $departureDate->format('m/d/Y'));
+        $message->set(FlightMessage::FIELD_COUNT_ADULT, $this->request->adult);
+        $message->set(FlightMessage::FIELD_COUNT_CHILD, $this->request->child);
+        $message->set(FlightMessage::FIELD_COUNT_BABY, $this->request->infant);
+        
+        $message->set(FlightMessage::FIELD_PROCESS, "01");
+        
+        $i = 0;
+        foreach($this->request->seats as $seat)
+        {
+            $message->set(FlightMessage::FIELD_CLASSNAME1 + $i, $seat);
+            
+            $i++;
+        }
+        
+        if(isset($this->request->simulateSuccess) && $this->request->simulateSuccess == true)
+        {
+            $message->parse('RESERVASI*TPQZ-INT*1988974665*13*20170825174004*DESKTOP*BS76100*434003*FASTPAY*3094724*FARE*1441699465104*TPQZ-INT*0*CGK*SIN*08/27/2017*08/27/2017*1*0*0*01**88c1809ddd769ceb2107f82c986f49c942bbb43a*TPQZ=1=null=AIR ASIA=0=1=1=http://static.bebasbayar.com/maskapai/logo-airasia.png=1=http://www.fastravel.co.id/airasia.php|TPQG=1=null=CITILINK=0=1=1=http://static.bebasbayar.com/maskapai/logo-citilink.png=1=http://www.fastravel.co.id/citilink.php|TPXN=1=null=EXPRESS AIR=0=1=0=http://static.bebasbayar.com/maskapai/logo-expressair.png=1=http://www.fastravel.co.id/xpressair.php|TPGA=1=null=GARUDA INDONESIA=0=1=1=http://static.bebasbayar.com/maskapai/logo-garuda.png=1=http://www.fastravel.co.id/garuda.php|TPKP=1=null=KALSTAR AVIATION=0=1=1=http://static.bebasbayar.com/maskapai/logo-kalstar.png=1=http://www.fastravel.co.id/kalstar.php|TPJT=1=null=LION AIR=1=1=0=http://static.bebasbayar.com/maskapai/logo-lionair.png=1=http://www.fastravel.co.id/lion.php|TPSJ=1=null=SRIWIJAYA=0=1=1=http://static.bebasbayar.com/maskapai/logo-sriwijaya.png=1=http://www.fastravel.co.id/sriwijaya.php|TPMV=1=null=TRANS NUSA=0=0=0=http://static.bebasbayar.com/maskapai/logo-transnusa.png=1=http://www.fastravel.co.id/transnusa.php|TPTN=1=null=TRIGANA AIR=0=1=1=http://static.bebasbayar.com/maskapai/logo-trigana.png=1=http://www.fastravel.co.id/trigana.php***TPGA=1=1=1=1=1=1=0=0=0=0=1=0|TPJT=1=1=1=1=1=1=0=0=0=0=1=0|TPKP=1=1=1=1=1=1=0=1=0=0=1=0|TPMV=1=1=1=1=1=1=0=0=0=0=0=0|TPMZ=1=1=1=1=1=1=0=1=1=0=1=0|TPQG=1=1=1=1=1=1=0=0=0=0=0=0|TPQZ=1=1=1=1=1=1=1=0=1=0=0=0|TPRI=1=1=1=1=1=1=1=0=0=0=0=0|TPSJ=1=1=1=1=1=1=0=0=0=0=0=0|TPSY=1=1=1=1=1=1=0=0=0=0=0=0|TPTN=1=1=1=1=1=1=0=1=0=0=1=0|TPXN=1=1=1=1=1=1=0=0=0=0=0=0*;*********************####771750*{"titlea1":{"category":"adult1","mandatory":1,"resource":[{"id":"Mr","name":"Tuan"},{"id":"Mrs","name":"Nyonya"},{"id":"Ms","name":"Nona"}],"example":"Mr","type":"combobox","disabled":"false","FieldText":"Titel"},"conEmailAddress":{"category":"contact","mandatory":1,"example":"example@email.com","type":"textbox","disabled":"false","FieldText":"Kontak Email"},"dcheckinbaggagea11":{"category":"adult1","mandatory":1,"resource":[{"id":"0","name":"Tidak ada bagasi terdaftar"},{"id":"20","name":"Bagasi 20 kg (+ IDR 170.000,00)"},{"id":"25","name":"Bagasi 25 kg (+ IDR 180.000,00)"},{"id":"30","name":"Bagasi 30 kg (+ IDR 340.000,00)"},{"id":"40","name":"Bagasi 40 kg (+ IDR 680.000,00)"}],"example":0,"type":"combobox","disabled":"false","FieldText":"Pilih Bagasi Penerbangan Pergi (CGK - SIN)"},"conSalutation":{"category":"contact","mandatory":1,"resource":[{"id":"Mr","name":"Tuan"},{"id":"Mrs","name":"Nyonya"},{"id":"Ms","name":"Nona"}],"example":"Mr","type":"combobox","disabled":"false","FieldText":"Titel"},"separator_adult1":{"category":"separator","mandatory":1,"example":"","type":"text","disabled":"false","FieldText":"Penumpang Dewasa 1"},"conPhone":{"category":"contact","mandatory":1,"example":"+6285212345678","type":"textbox","disabled":"false","FieldText":"No. Telepon"},"conFirstName":{"category":"contact","mandatory":1,"example":"Jane","type":"textbox","disabled":"false","FieldText":"Nama Depan"},"lastnamea1":{"category":"adult1","mandatory":0,"example":"wacob","type":"textbox","disabled":"false","FieldText":"Nama Belakang"},"firstnamea1":{"category":"adult1","mandatory":1,"example":"Jane","type":"textbox","disabled":"false","FieldText":"Nama Depan"},"conLastName":{"category":"contact","mandatory":0,"example":"wacob","type":"textbox","disabled":"false","FieldText":"Nama Belakang"},"passportnationalitya1":{"category":"adult1","mandatory":1,"resource":"https:\/\/api.tiket.com\/general_api\/listCountry","example":"ID","type":"combobox","disabled":"false","FieldText":"Kewarganegaraan"},"birthdatea1":{"category":"adult1","mandatory":1,"example":"1990-01-01","type":"datetime","disabled":"false","FieldText":"Tanggal Lahir"},"separator":{"category":"separator","mandatory":1,"example":"","type":"text","disabled":"false","FieldText":"Informasi Kontak yang Dapat Dihubungi"}}*{"stop":"Langsung","simple_arrival_time":"09:50","departure_flight_date_str_short":"Min, 27 Agu 2017","flight_infos":{"flight_info":[{"simple_arrival_time":"09:50","string_departure_date":"Minggu, 27 Agu 2017","departure_date_time":"2017-08-27 06:55:00","duration_time":6900,"string_departure_date_short":"Min, 27 Agu 2017","arrival_city_name":"Singapore","transit_duration_hour":0,"simple_departure_time":"06:55","duration_minute":"55m","terminal":"2E","arrival_date_time":"2017-08-27 09:50:00","check_in_baggage_unit":"Kg","duration_hour":"1j","departure_city_name":"Jakarta","departure_city":"CGK","transit_duration_minute":0,"class":"I","flight_number":"QZ-262","airlines_name":"AIRASIA","arrival_city":"SIN","img_src":"https:\/\/cdn01.tiket.photos\/images\/flight\/logo\/icon_airasia.png","transit_arrival_text_city":"","transit_arrival_text_time":"","string_arrival_date":"Minggu, 27 Agu 2017","string_arrival_date_short":"Min, 27 Agu 2017","check_in_baggage":15}]},"arrival_flight_date":"2017-08-27 09:50:00","price_value":"735000.00","count_infant":"0","timestamp":"2017-08-25 17:39:28","simple_departure_time":"06:55","arrival_flight_date_str_short":"Min, 27 Agu 2017","price_adult":"735000.00","flight_id":"265574206","check_in_baggage_unit":"Kg","markup_price_string":"","sss_key":null,"flight_date":"2017-08-27","image":"https:\/\/cdn01.tiket.photos\/images\/flight\/logo\/icon_airasia.png","flight_number":"QZ-262","count_adult":"1","departure_flight_date":"2017-08-27 06:55:00","airlines_name":"AIRASIA","count_child":"0","need_baggage":1,"departure_flight_date_str":"Minggu, 27 Agu 2017","duration":"1 j 55 m","price_child":"0.00","long_via":"","arrival_flight_date_str":"Minggu, 27 Agu 2017","price_infant":"0.00","check_in_baggage":15,"full_via":"CGK - SIN (06:55 - 09:50)"}******************771750**********************TPSW***771750*0*0**tpqz-tiketcom*0*00*TPQZ=1=null=AIR ASIA=0=1=1=http://static.bebasbayar.com/maskapai/logo-airasia.png=1|TPQG=1=null=CITILINK=0=1=1=http://static.bebasbayar.com/maskapai/logo-citilink.png=1|TPXN=1=null=EXPRESS AIR=0=1=0=http://static.bebasbayar.com/maskapai/logo-expressair.png=1|TPGA=1=null=GARUDA INDONESIA=0=1=1=http://static.bebasbayar.com/maskapai/logo-garuda.png=1|TPJQ=1=null=JETSTAR=1=1=0=http://static.jetstar.com/images/logo_footer.png=1|TPKP=1=null=KALSTAR AVIATION=0=1=1=http://static.bebasbayar.com/maskapai/logo-kalstar.png=1|TPJT=1=null=LION AIR=1=1=0=http://static.bebasbayar.com/maskapai/logo-lionair.png=1|TPSJ=1=null=SRIWIJAYA=0=1=1=http://static.bebasbayar.com/maskapai/logo-sriwijaya.png=1|TPTR=1=null=TIGER AIR=0=1=1=http://www.tigerair.com/_templates/img/tigerair-id-logo.gif=1|TPMV=1=null=TRANS NUSA=0=0=0=http://static.bebasbayar.com/maskapai/logo-transnusa.png=1|TPTN=1=null=TRIGANA AIR=0=1=1=http://static.bebasbayar.com/maskapai/logo-trigana.png=1');
+        }else{
+            $this->sendToCore($message);
+        }
+        
+        FareResponseParser::instance()->parse($message)->into($this);
+    }
+}

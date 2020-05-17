@@ -1,0 +1,35 @@
+<?php
+
+namespace Fastravel\Pelni;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\PelniMessage;
+use Fastravel\Libraries\Parser\Pelni\PaymentResponseParser;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\MTI;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Pelni";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::BAYAR);
+        $this->setProductCode("SHPPELNI");
+        
+        $message = new PelniMessage($this);
+        
+        $message->set(PelniMessage::FIELD_OPERATION, 14);
+        
+        $message->set(PelniMessage::FIELD_PAYMENT_TYPE, "TUNAI");
+        $message->set(PelniMessage::FIELD_PAYMENT_CODE, $this->request->paymentCode);
+        $message->set(PelniMessage::FIELD_TRX_ID, $this->request->transactionId);
+
+//        if(!Utility::isTesterOutlet($this->getOutletId())){
+            $this->sendToCore($message);
+//        }
+        //$message->parse('BAYAR*SHPPELNI*2001628416*7*20170831100409*WEB*****10000*FA10115*------**7683637*2**171*798552118*00*SUKSES*14***********************************TUNAI*EDBS56*8878238442*********0***');
+                
+        PaymentResponseParser::instance()->parse($message)->into($this);
+    }
+}

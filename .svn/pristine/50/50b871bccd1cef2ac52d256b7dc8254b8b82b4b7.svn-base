@@ -1,0 +1,157 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Wisata;
+
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\APIController;
+use Phalcon\Db;
+
+class DestinationResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * TravelBus message response from core.
+     * 
+     * @var WisataMessage
+     */
+    protected $message;
+    protected $ambiguity = array('%yogya%','%jogja%');
+    protected $keySearch1;
+    protected $keySearch2;
+    
+    protected $url_foto = "http://best.fastravel.co.id/";
+    protected $bb_url_foto = "https://static.scash.bz/jadipergi/img/wisata/";
+
+    public function into(APIController $apiController)
+    {
+        if(!in_array($apiController->request->keySearch, $this->ambiguity))
+        {
+            $this->ambiguity[0] = "%".$apiController->request->keySearch."%";
+            $this->ambiguity[1] = "%".$apiController->request->keySearch."%";
+        }
+        
+        $dest = $apiController->db->query("select d.id_propinsi,mp.nama_propinsi,d.days, d.nights, 
+                d.nama_destinasi,d.id_destinasi, '[' || array_to_string(array_agg(quote_literal(obj.nama_objek_wisata)),',') || ']' as obyek_wisata 
+                from paket_wisata_2_mt_destinasi d 
+                left join paket_wisata_2_objek_wisata obj on obj.id_destinasi = d.id_destinasi 
+                left join mt_propinsi mp on mp.id_propinsi = d.id_propinsi 
+                where d.id_destinasi in (
+                    select distinct pwmd.id_destinasi
+                    from paket_wisata_2_mt_destinasi pwmd
+                    left join paket_wisata_2_harga_paket pwhp on pwmd.id_destinasi = pwhp.id_destinasi 
+                    where id_propinsi in (
+                        select id_propinsi 
+                        from mt_propinsi 
+                        where lower(nama_propinsi) like lower(?) 
+                        or lower(nama_propinsi) like lower(?)
+                    )  
+                    and pwhp.tanggal::date >= NOW()::date             
+                    union
+                    select distinct(pwmd.id_destinasi) 
+                    from paket_wisata_2_mt_destinasi pwmd
+                    left join paket_wisata_2_harga_paket pwhp on pwmd.id_destinasi = pwhp.id_destinasi 
+                    where lower(negara) like lower(?)   
+                    and pwhp.tanggal::date >= NOW()::date 
+                    union                    
+                    select distinct pwmd.id_destinasi 
+                    from paket_wisata_2_mt_destinasi pwmd
+                    left join paket_wisata_2_harga_paket pwhp on pwmd.id_destinasi = pwhp.id_destinasi 
+                    where (lower(nama_destinasi) like lower(?)
+                    or lower(nama_destinasi) like lower(?))
+                    and pwhp.tanggal::date >= NOW()::date 
+                    union                    
+                    select distinct pwdw.id_destinasi 
+                    from paket_wisata_2_data_wilayah pwdw 
+                    left join paket_wisata_2_harga_paket pwhp on pwdw.id_destinasi = pwhp.id_destinasi 
+                    where (lower(nama_wilayah) like lower(?) 
+                    or lower(nama_wilayah) like lower(?))
+                    and pwhp.tanggal::date >= NOW()::date 
+                    union
+                    select distinct pwow.id_destinasi 
+                    from paket_wisata_2_objek_wisata pwow
+                    left join paket_wisata_2_harga_paket pwhp on pwow.id_destinasi = pwhp.id_destinasi 
+                    where (lower(nama_objek_wisata) like lower(?)
+                    or lower(nama_objek_wisata) like lower(?))     
+                    and pwhp.tanggal::date >= NOW()::date 
+                    union
+                    select distinct pwdtw.id_destinasi 
+                    from paket_wisata_2_data_tipe_wisata pwdtw
+                    left join paket_wisata_2_harga_paket pwhp on pwdtw.id_destinasi = pwhp.id_destinasi 
+                    where id_tipe_wisata in (
+                        select id_tipe_wisata 
+                        from paket_wisata_2_mt_tipe_wisata 
+                        where lower(nama_tipe_wisata) like lower(?)
+                        or lower(nama_tipe_wisata) like lower(?)   
+                    )
+                    and pwhp.tanggal::date >= NOW()::date    
+                ) and d.is_verified_os = 1 and d.is_active = 1 and d.id_supplier in(
+                    select id_supplier 
+                    from paket_wisata_2_mt_supplier 
+                    where is_verified_by_os = 1
+                ) group by 1,2,3,4,5,6",
+                
+                [$this->ambiguity[0],$this->ambiguity[1],
+                 $this->ambiguity[0],$this->ambiguity[0],$this->ambiguity[1],
+                 $this->ambiguity[0],$this->ambiguity[1],
+                 $this->ambiguity[0],$this->ambiguity[1],
+                 $this->ambiguity[0],$this->ambiguity[1]]);
+        
+        $dest->setFetchMode(Db::FETCH_OBJ);
+        
+        $destination = $dest->fetchAll();
+        
+        $destinationResult = array();
+        
+        $index = 0;
+        
+        foreach ($destination as $value) {
+            
+            
+            $fotos = $apiController->db->query("select * from paket_wisata_2_foto_destinasi where id_destinasi=? order by urutan asc", [$value->id_destinasi])->fetchAll();
+
+            foreach ($fotos as $f) 
+            {
+                switch (intval($f['use_cdn'])) 
+                {
+                    case 1:
+                        $url_photo =  $this->bb_url_foto . $f['path_foto'];
+                        break;
+                    case 0: 
+                        $url_photo =  $this->url_foto . $f['path_foto'];
+                        break;
+                    default:
+                        $url_photo =  $this->url_foto . $f['path_foto'];
+                        break;
+                }
+            }
+            
+            $node =  (object) array
+            (
+                "id_propinsi" => $value->id_propinsi,
+                "nama_propinsi" => $value->nama_propinsi,
+                "days"=> $value->days,
+                "nights"=>$value->nights,
+                "nama_destinasi"=>$value->nama_destinasi,
+                "id_destinasi"=>$value->id_destinasi,
+                "photo"=>$url_photo,
+                "obyek_wisata"=>json_decode(str_replace("'","\"",$value->obyek_wisata))
+            );
+            
+            $destinationResult[$index] = ($node);
+            
+            $index++;
+            
+        }
+        
+        if(count($destinationResult) > 0)
+        {    
+            $apiController->response->data = $destinationResult;   
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "Tujuan wisata dengan key ". $apiController->request->keySearch ." tidak ditemukan.");
+        }
+        
+    }
+}

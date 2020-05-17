@@ -1,0 +1,47 @@
+<?php
+
+namespace Fastravel\Hotel;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\Parser\Hotel\SearchResponseParser;
+use Fastravel\Libraries\MTI;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search Hotel";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::HOTELADM);
+        $this->setProductCode("RHOTEL");
+        
+        $message = new HotelMessage($this);
+        
+        $message->set(HotelMessage::FIELD_CMD, "SearchHotel");
+        
+        $message->set(HotelMessage::FIELD_PAX_PASSPORT, "IDN");
+        $message->set(HotelMessage::FIELD_DEST_COUNTRY, "IDN");
+        
+        if(isset($this->request->hotelId))
+        {
+            $message->set(HotelMessage::FIELD_HOTEL_ID, $this->request->hotelId);
+        }
+        
+        if(isset($this->request->cityId))
+        {
+            $message->set(HotelMessage::FIELD_DEST_CITY, $this->request->cityId);
+        }
+        
+        $message->set(HotelMessage::FIELD_ROOM_COUNT, $this->request->room);
+        $message->set(HotelMessage::FIELD_GUEST_COUNT, $this->request->guest);
+        $message->set(HotelMessage::FIELD_PERIOD_CHECKIN, $this->request->checkInDate);
+        $message->set(HotelMessage::FIELD_PERIOD_CHECKOUT, $this->request->checkOutDate);
+        
+        $message->set(HotelMessage::FIELD_PERIOD_ROOM_INFO, '[{"AdultNum":{"RoomType":"","RQBedChild":"N","content":"2"},"ChildAges":""}]');
+
+        $this->sendToCore($message);
+        
+        SearchResponseParser::instance()->parse($message)->into($this);
+    }
+}

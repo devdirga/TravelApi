@@ -1,0 +1,90 @@
+<?php
+
+namespace Travel\Libraries\Message;
+
+use Travel\Libraries\APIController;
+
+class TravelBusMessage extends BaseMessage
+{
+
+    const FIELD_TRANSACTION_ID = 6;
+    const FIELD_ID_LOKET = 7;
+    const FIELD_PIN = 8;
+    const FIELD_TOKEN = 9;
+    const FIELD_BALANCE = 10;
+    const FIELD_JENIS_STRUK = 11;
+    const FIELD_KODE_PRODUK_BILLER = 12;
+
+    const FIELD_COMMAND = 13;
+
+    const FIELD_TRAVEL_AGENT = 14;
+    const FIELD_KOTA_BERANGKAT = 15;
+    const FIELD_CABANG_BERANGKAT = 16;
+    const FIELD_KOTA_TIBA = 17;
+    const FIELD_CABANG_TIBA = 18;
+    const FIELD_TANGGAL_BERANGKAT = 19;
+    const FIELD_WAKTU_BERANGKAT = 20;
+    const FIELD_WAKTU_BERANGKAT_START = 21;
+    const FIELD_WAKTU_BERANGKAT_END = 22;
+    const FIELD_PULANG_PERGI = 23;
+    const FIELD_JUMLAH_PENUMPANG = 24;
+    const FIELD_KODE_JURUSAN = 25;
+    const FIELD_ID_JURUSAN = 26;
+    const FIELD_KODE_JADWAL = 27;
+    const FIELD_NOMINAL_ADMIN = 28;
+
+    const FIELD_NO_REFF = 29;
+    const FIELD_OTP = 30;
+    const FIELD_TRAVEL_CODE = 31;
+    const FIELD_TANGGAL_RESERVASI = 32;
+    const FIELD_STATUS_GBK = 33;
+
+    const FIELD_LAYOUT_KURSI = 34;
+    const FIELD_NO_KURSI = 35;
+
+    const FIELD_NAMA_PEMESAN = 36;
+    const FIELD_ALAMAT_PEMESAN = 37;
+    const FIELD_NO_HP_PEMESAN = 38;
+    const FIELD_EMAIL_PEMESAN = 39;
+
+    const FIELD_PENUMPANG1 = 40;
+    const FIELD_PENUMPANG2 = 41;
+    const FIELD_PENUMPANG3 = 42;
+
+    const FIELD_KODE_BOOKING = 43;
+    const FIELD_KODE_PEMBAYARAN = 44;
+    const FIELD_NO_TIKET = 45;
+
+    const FIELD_MESSAGE = 46;
+    const FIELD_NOMINAL = 47;
+    const FIELD_NTA = 48;
+    const FIELD_STATUS = 49;
+    const FIELD_KETERANGAN = 50;
+
+    const FIELD_STATUS_BAYAR = 51;
+    const FIELD_WAKTU_BAYAR = 52;
+    const FIELD_FLAG_BATAL = 53;
+    const FIELD_PROMO = 54;
+    const FIELD_ALAMAT_ASAL = 55;
+    const FIELD_ALAMAT_TUJUAN = 56;
+    const FIELD_NO_KTP = 57;
+    const FIELD_ID_LOKASI = 58;
+    const FIELD_TRAVEL_PAYMENT = 59;
+    const FIELD_VOUCHER = 60;
+    const FIELD_DISC_PROMO = 61;
+
+    protected $dataLength = 62;
+
+    public function __construct(APIController $controller)
+    {
+        parent::__construct($controller);
+
+        $this->fillDefault(6);
+
+        $this->controller = $controller;
+
+        $this->set(TravelBusMessage::FIELD_ID_LOKET, $controller->getOutletId());
+        $this->set(TravelBusMessage::FIELD_PIN, $controller->getPin());
+        $this->set(TravelBusMessage::FIELD_TOKEN, $controller->getKey());
+    }
+}

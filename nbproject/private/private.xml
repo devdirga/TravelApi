@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-private xmlns="http://www.netbeans.org/ns/project-private/1">
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group name="Travel">
+            <file>file:/media/devdirga/Data/Workplace/RepositoryTravel/component/TravelAPI/protected/Controllers/Flight/SearchController.php</file>
+            <file>file:/media/devdirga/Data/Workplace/RepositoryTravel/component/TravelAPI/protected/Libraries/Parser/Flight/SearchResponseParser.php</file>
+            <file>file:/media/devdirga/Data/Workplace/RepositoryTravel/component/TravelAPI/protected/Libraries/APIController.php</file>
+            <file>file:/media/devdirga/Data/Workplace/RepositoryTravel/component/TravelAPI/protected/Libraries/Parser/Hotel/SearchResponseParser.php</file>
+            <file>file:/media/devdirga/Data/Workplace/RepositoryTravel/component/TravelAPI/protected/Libraries/HttpConnect.php</file>
+        </group>
+        <group name="Travel.co.id"/>
+        <group/>
+    </open-files>
+</project-private>

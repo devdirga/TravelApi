@@ -1,0 +1,27 @@
+<?php
+
+namespace Fastravel\Pelni;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\PelniMessage;
+use Fastravel\Libraries\Parser\Pelni\GetOriginDestinationResponseParser;
+use Fastravel\Libraries\MTI;
+
+class GetOriginDestinationController extends APIController
+{
+    protected $invoking = "Get Origin Destination Pelni";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::TAGIHAN);
+        $this->setProductCode("SHPPELNI");
+        
+        $message = new PelniMessage($this);
+        
+        $message->set(PelniMessage::FIELD_OPERATION, 2);
+        
+        $this->sendToCore($message);
+        
+        GetOriginDestinationResponseParser::instance()->parse($message)->into($this);
+    }
+}

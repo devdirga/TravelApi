@@ -1,0 +1,306 @@
+<?php
+
+namespace Fastravel\Libraries;
+
+use Phalcon\Mvc\Controller;
+use Lcobucci\JWT\Parser;
+use Lcobucci\JWT\Signer\Hmac\Sha256;
+use Lcobucci\JWT\Builder;
+
+use Fastravel\Libraries\Response;
+use Fastravel\Libraries\HttpConnect;
+use Phalcon\Db;
+
+use Fastravel\Libraries\Message\BaseMessage;
+
+class APIController extends Controller
+{
+    protected $invoking = "Welcome";
+    
+    public $request;
+    
+    /**
+     * Response object. 
+     * 
+     * @var Response
+     */
+    public $response;
+    
+    private $mti;
+    private $productCode;
+    
+    private $outletId;
+    private $pin;
+    private $key;
+    
+    private $processTime;
+    
+    private $isManualOutput = false;
+    
+    public function initialize()
+    {
+        
+        $rawPost = file_get_contents("php://input");
+        
+        $this->request = json_decode($rawPost);
+        
+        $this->response = new Response();
+        
+        $this->processTime = microtime(TRUE);
+        
+        if  (json_last_error() === JSON_ERROR_NONE) 
+        {
+            $this->execute();
+        }
+        else
+        {
+            $this->response->setStatus("02", "Request is not in json format.");
+        }
+    }
+    
+    public function createToken($outletId, $pin, $key)
+    {
+        $signer = new Sha256();
+        
+        $token = (new Builder())->setIssuer($this->config->app->jwtIssuer)
+                ->setAudience($this->config->app->jwtAudience)
+                ->setId($this->config->app->jwtId, true)
+                ->setIssuedAt(time())
+                ->setNotBefore($this->config->app->jwtNotBefore)
+                ->setExpiration($this->config->app->jwtExpired)
+                ->set('outletId', $outletId)
+                ->set('pin', $pin)
+                ->set('key', $key)
+                ->sign($signer, $this->config->app->jwtSignKey)
+                ->getToken();
+        
+        $this->response->token = $token->__toString();
+    }
+    
+    protected function execute()
+    {
+        $uri = ltrim(filter_input(INPUT_SERVER,'REQUEST_URI'),"/");
+        
+        unset($this->response->token);
+        
+        if (strpos($uri, 'token_validity') !== false) {
+            
+            if(!$this->verifiedToken())
+            {
+                $this->response->setStatus("03", "Silahkan login kembali dengan key baru Anda.");
+                
+                $this->isManualOutput = true;
+                
+                exit(json_encode($this->response));
+            }
+            
+        } else
+        
+        if(!in_array($uri, (array) $this->config->app->publicUris))
+        {
+            if(!$this->verifiedToken())
+            {
+                $this->response->setStatus("03", "Token is not recognized.");
+                
+                $this->isManualOutput = true;
+                
+                exit(json_encode($this->response));
+            }
+        }
+    }
+    
+    protected function verifiedToken()
+    {
+        $token = (new Parser())->parse($this->request->token);
+        
+        $uri = ltrim(filter_input(INPUT_SERVER,'REQUEST_URI'),"/");
+        
+        if($token->getClaim('outletId')==='BS0004' && (strpos($uri, 'wisata') === false) )
+        {
+            return false;
+        }
+        
+        $signer = new Sha256();
+
+        if(
+            $token->verify($signer, $this->config->app->jwtSignKey) && 
+            $token->getHeader('jti') == $this->config->app->jwtId && 
+            $token->getClaim('aud') == $this->config->app->jwtAudience
+        )
+        {
+            $this->setOutletId($token->getClaim('outletId'));
+            $this->setPin($token->getClaim('pin'));
+            $this->setKey($this->getOutletToken($token->getClaim('outletId'),$token->getClaim('key')));
+            
+            return true;
+        }
+        else
+        {
+            $this->response->setStatus("03", "Token is not recognized");
+        }
+        
+        return false;
+    }
+    
+    protected function getOutletToken($idOutlet,$key){
+        // TODO define variable
+        $today = date("Y-m-d");
+        $date_expired = date("Y-m-d 00:00:00", strtotime($today . " + 1 DAY"));
+        $result = "";
+        // TODO check type of outlet -> dongle or non-dongle
+        $query = "SELECT token 
+               FROM mt_outlet 
+               WHERE id_outlet = '" . strtoupper(trim($idOutlet)) . "' 
+               AND token = CRYPT('FASTPAY',token)";
+        $sql = $this->db->query($query);
+        $sql->setFetchMode(Db::FETCH_OBJ);
+        $data = $sql->fetch();
+        
+        if(count($data) == 0){
+            // TODO block for dongle 
+        }else{
+         
+            // TODO  block for non-dongle
+            $query = "SELECT date_created 
+                      FROM fmss.mobile_token 
+                      WHERE id_outlet = '" . strtoupper(trim($idOutlet)) . "' 
+                      AND date_expired = '" . $date_expired . "' 
+                      ORDER BY date_created DESC 
+                      LIMIT 2";
+            
+            $sql = $this->db->query($query);
+            $sql->setFetchMode(Db::FETCH_OBJ);
+            $data = $sql->fetchAll();
+        
+            if(!count($data) > 0){
+                $result = "XYZ";
+            }else{
+                $in_datecreated = "";
+                foreach($data as $vals){
+                    $in_datecreated .= $in_datecreated == "" ? "'". $vals->date_created . "'" : ", '". $vals->date_created . "'";
+                }
+                $query = "SELECT count(*) as hasil 
+                        FROM fmss.mobile_token 
+                        WHERE id_outlet = '" . strtoupper(trim($idOutlet)) . "' 
+                        AND date_expired = '" . $date_expired . "' 
+                        AND date_created IN (" . $in_datecreated . ") 
+                        AND key = CRYPT('" . trim($key) . "', key)";
+                $sql = $this->db->query($query);
+                $sql->setFetchMode(Db::FETCH_OBJ);
+                $check = $sql->fetch();
+                
+                if(!intval($check->hasil) > 0){
+                    $result = "XYZ";
+                }else{
+                    $result = "FASTPAY";
+                }
+            }
+        }
+            return $result;
+    }
+    
+    protected function sendToCore($message)
+    {
+        $response = HttpConnect::send($message->toString());
+        
+        if($response->rc == null)
+        {
+            $message->parse($response->response);
+            $this->response->setMid($message->get(BaseMessage::FIELD_MID));
+        }
+        else
+        {
+            $this->response->setStatus($response->rc, $response->rd);
+            $this->response->setMid($message->get(BaseMessage::FIELD_MID));
+            
+            exit();
+        }
+    }
+    
+    public function getOutletData($outletId){
+        
+        $d = $this->db->query(
+            "SELECT o.id_outlet,o.balance, o.nama_outlet, o.alamat_outlet, o.notelp_outlet, o.nama_pemilik, o.alamat_pemilik, o.notelp_pemilik, k.nama_kota " .
+            "FROM fmss.mt_outlet o LEFT JOIN fmss.mt_kota k ON o.id_kota = k.id_kota " .
+            "WHERE id_outlet = ?",[$outletId]
+        );
+        
+        $d->setFetchMode(Db::FETCH_OBJ);
+        
+        return $d->fetch();
+        
+    }
+    
+    public function isPartner($outletId){
+        return substr($outletId,0,2) == "HH";
+    }
+    
+        public function getMTI()
+    {
+        return $this->mti;
+    }
+
+    public function setMTI($mti)
+    {
+        $this->mti = $mti;
+    }
+    
+    public function getProductCode()
+    {
+        return $this->productCode;
+    }
+
+    public function setProductCode($productCode)
+    {
+        $this->productCode = $productCode;
+    }
+    
+    public function getOutletId()
+    {
+        return $this->outletId;
+    }
+
+    public function setOutletId($outletId)
+    {
+        $this->outletId = $outletId;
+    }
+    
+    public function getPin()
+    {
+        return $this->pin;
+    }
+
+    public function setPin($pin)
+    {
+        $this->pin = $pin;
+    }
+    
+    public function getKey()
+    {
+        return $this->key;
+    }
+
+    public function setKey($key)
+    {
+        $this->key = $key;
+    }
+
+    public function __destruct()
+    {
+        $this->response->invoking = $this->invoking;
+        //$this->response->processingTime = Utility::getProcessingTime($this->processTime);
+        $this->response->processingTime = (microtime(TRUE) - $this->processTime). " Second";
+        //Masking response code right before message send to client [hanz]
+//        $this->response->setStatus($this->response->rc, $this->response->mask($this->response->rc,$this->response->data));
+        
+        if(defined("APP_RC"))
+        {
+            $this->response->setStatus(APP_RC, APP_RD);
+        }
+        
+        if(!$this->isManualOutput)
+        {
+            exit(json_encode($this->response));
+        }
+    }
+}

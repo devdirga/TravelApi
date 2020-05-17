@@ -1,0 +1,33 @@
+<?php
+
+namespace Fastravel\TravelBus;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TravelBusMessage;
+use Fastravel\Libraries\Parser\TravelBus\SearchResponseParser;
+use Fastravel\Libraries\MTI;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search TravelBus";
+    
+    
+    
+    public function indexAction()
+    {
+        
+        $this->setMTI(MTI::DATA);
+        $this->setProductCode($this->request->produk);
+        
+        $message = new TravelBusMessage($this);
+
+        $message->set(TravelBusMessage::FIELD_TANGGAL_BERANGKAT, $this->request->departureDate);        
+        $message->set(TravelBusMessage::FIELD_TRAVEL_CODE, $this->request->codeAgent);
+        $message->set(TravelBusMessage::FIELD_ID_JURUSAN, $this->request->codeJurusan);
+        $message->set(TravelBusMessage::FIELD_COMMAND, $this->request->command);
+        
+        $this->sendToCore($message);
+        
+        SearchResponseParser::instance()->parse($message)->into($this);
+    }
+}

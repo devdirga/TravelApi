@@ -1,0 +1,93 @@
+<?php
+
+namespace Fastravel\Hotel;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\Parser\Hotel\PaymentResponseParser;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\MTI;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Hotel";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::HOTELPAY);
+        $this->setProductCode("RHOTEL");
+        
+        $message = new HotelMessage($this);
+        
+        $message->set(HotelMessage::FIELD_PAX_PASSPORT, "IDN");
+        $message->set(HotelMessage::FIELD_DEST_COUNTRY, "IDN");
+        
+        $message->set(HotelMessage::FIELD_CMD, "BookHotel");
+        $message->set(HotelMessage::FIELD_RESNO_FINISHBOOK, "y");
+        $message->set(HotelMessage::FIELD_HOTEL_ID, $this->request->hotelDetail->hotelId);
+        $message->set(HotelMessage::FIELD_BOOKING_CONTACT_NOHP, $this->request->contact->phone);
+        $message->set(HotelMessage::FIELD_BOOKING_CONTACT_FIRST_NAME, $this->request->contact->firstName);
+        $message->set(HotelMessage::FIELD_BOOKING_CONTACT_LAST_NAME, $this->request->contact->lastName);
+        $message->set(HotelMessage::FIELD_BOOKING_CONTACT_EMAIL, $this->request->contact->email);
+        $message->set(HotelMessage::FIELD_BOOKING_CONTACT_CITY, $this->request->contact->city);
+        
+        $message->set(HotelMessage::FIELD_NOMINAL, $this->request->hotelDetail->price);
+        
+        // ===== Start of HotelMessage::FIELD_HOTEL_DATA =====
+        $hotelData = new \stdClass();
+        $hotelData->Seq = 1;
+        $hotelData->InternalCode = $this->request->hotelDetail->internalCode;
+        $hotelData->FlagAvail = true;
+        $hotelData->HotelId = $this->request->hotelDetail->hotelId;
+        $hotelData->RequestDes = "";
+        
+        $hotelData->RoomCatg = array(); 
+        
+        $room = new \stdClass();
+        $room->CatgId = $this->request->hotelDetail->categoryId;
+        $room->CatgName = $this->request->hotelDetail->categoryName;
+        $room->checkIn = $this->request->hotelDetail->checkInDate;
+        $room->checkOut = $this->request->hotelDetail->checkOutDate;
+        $room->BFType = $this->request->hotelDetail->bfType;
+        $room->RoomType = array();
+        
+        $roomType = new \stdClass();
+        $roomType->Seq = 1;
+        $roomType->RQBedChild = "N";
+        $roomType->AdultNum = $this->request->guest;
+        $roomType->TypeName = $this->request->hotelDetail->typeName;
+        $roomType->Price = $this->request->hotelDetail->price;
+        $roomType->ChildAges = "";
+        $roomType->PaxInformation = array();
+        
+        $paxInformation = new \stdClass();
+        $paxInformation->Id = 1;
+        $paxInformation->Content = $this->request->contact->firstName . " " . $this->request->contact->lastName . ", Tn.";
+        $paxInformation->negara_pax = "id";
+        $paxInformation->email_pax = $this->request->contact->email;
+        $paxInformation->no_hp_pax = $this->request->contact->phone;
+        
+        $roomType->PaxInformation[] = $paxInformation;
+        $room->RoomType[] = $roomType;
+        $hotelData->RoomCatg[] = $room;
+        // ===== End of HotelMessage::FIELD_HOTEL_DATA =====
+        
+        $message->set(HotelMessage::FIELD_HOTEL_DATA, json_encode([$hotelData]));
+        
+        $message->set(HotelMessage::FIELD_ROOM_COUNT, $this->request->room);
+        $message->set(HotelMessage::FIELD_GUEST_COUNT, $this->request->guest);
+        $message->set(HotelMessage::FIELD_PERIOD_CHECKIN, $this->request->hotelDetail->checkInDate);
+        $message->set(HotelMessage::FIELD_PERIOD_CHECKOUT, $this->request->hotelDetail->checkOutDate);
+        
+        $message->set(HotelMessage::FIELD_HOTEL_BILLER, $this->request->billerId);
+        $message->set(HotelMessage::FIELD_RESNO, $this->request->bookingCode);
+        $message->set(HotelMessage::FIELD_PERIOD_ROOM_INFO, '[{"AdultNum":{"RoomType":"","RQBedChild":"N","content":"2"},"ChildAges":""}]');
+        
+//        if(!Utility::isTesterOutlet($this->getOutletId())){
+            $this->sendToCore($message);
+//        }
+        //$message->parse('HOTELPAY*RHOTEL*1902780903*7*20170720120147*WEB*123*123**608000*0*FA24707*161987*fastpay_report_cu*3215283*2**RHOTEL*775453018*00*Success*BookHotel*36130809***y******21513667***IDN**IDN***2017-07-20*2017-07-22*1*2****085364691129*Herman*Santoso*niiwakarya@gmail.com*-*THE WIN HOTEL SURABAYA, SURABAYA*-*-*-*206128920170720--2061289****2******-0*[{"Seq":"1","InternalCode":"startdate#s#2017-07-20#n#night#s#2#n#room#s#1#n#adult#s#2#n#child#s#0#n#minstar#s#0#n#maxstar#s#0#n#minprice#s#0#n#maxprice#s#0#n#facilities#s#0#n#locations#s#0#n#hotelname#s#0#n#is_partner#s#0#n#room_id#s#2061289#n#hasPromo#s#1#n#enddate#s#2017-07-22#n#room_max_occupancy#s#2","FlagAvail":"","HotelId":"9472","RequestDes":"","RoomCatg":[{"CatgId":"206128920170720--2061289","CatgName":"Superior King \/ Twin","checkIn":"2017-07-20","checkOut":"2017-07-22","BFType":"","RoomType":[{"Seq":"1","TypeName":"Superior King \/ Twin","RQBedChild":"N","Price":"608000","AdultNum":"2","ChildAges":"","PaxInformation":[{"Id":"1","Content":"Santoso Herman,Tn."}]}]}]}]*""*""*167');
+        
+        PaymentResponseParser::instance()->parse($message)->into($this);
+    }
+}

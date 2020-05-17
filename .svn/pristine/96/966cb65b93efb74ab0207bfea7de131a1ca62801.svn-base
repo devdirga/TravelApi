@@ -1,0 +1,76 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\ProductCode;
+use Fastravel\Libraries\Message\DepMessage;
+use Fastravel\Libraries\HttpConnect;
+use Fastravel\Libraries\Models\Outlet;
+
+class DepositController extends APIController {
+
+    protected $invoking = "Deposit App";
+
+    public function indexAction() {
+
+        $message = new DepMessage($this);
+
+        $message->set(DepMessage::FIELD_MTI, (in_array($this->request->bank, ProductCode::BANK24)) ? ProductCode::TOPUP : ProductCode::TIKET);
+        $message->set(DepMessage::FIELD_KODE_PRODUK, (in_array($this->request->bank, ProductCode::BANK24)) ? ProductCode::TOPUP : ProductCode::TIKET);
+        $message->set(DepMessage::FIELD_BANK, (in_array($this->request->bank, ProductCode::BANK24)) ? explode('-', $this->request->bank)[0] : $this->request->bank);
+        $message->set(DepMessage::FIELD_NOMINAL, $this->request->nominal);
+        $message->set(DepMessage::FIELD_VIA, 'MOBILE_SMART');
+        $message->set(DepMessage::FIELD_DATETIME, date("Ymdhis"));
+        $message->set(DepMessage::FIELD_STEP, '1');
+        $message->set(DepMessage::FIELD_LOKET_ID, $this->getOutletId());
+        $message->set(DepMessage::FIELD_PIN, $this->getPin());
+        $message->set(DepMessage::FIELD_TOKEN, 'FASTPAY');
+
+        $this->response = $this->parseMessage(HttpConnect::sendBank24((in_array($this->request->bank, ProductCode::BANK24)) ? 'viadesktop=' . $message->toString() : $message->toString(), $this->request->bank), Outlet::take($this->getOutletId(), 'notelpPemilik'), $this->request->bank);
+    }
+
+    public function parseMessage($response, $phone, $bank) {
+        
+        $d = explode('*', urldecode($response));
+        
+        $rc = $d[13];
+        
+        $rd = $d[14];
+        
+        switch ($bank) {
+            case ProductCode::MANDIRI24:
+                break;
+            case ProductCode::BCA24:
+                $rd = str_replace('#', '. ', $rd);
+                break;
+            case ProductCode::BNI24:
+            case ProductCode::BRI24;
+                $rd = explode('Tata cara topup deposit', str_replace('#', '. ', $rd ) )[0];
+                break;
+            default:
+                break;
+        }
+        
+        if($rc==='00')
+        {    
+            $rd = str_ireplace('Mitra FastPay','Mitra Fastravel', $rd);
+            $rd .= (in_array($bank, ProductCode::BANK24))?'':' setelah 10 menit';
+            HttpConnect::sendSms(array('nohp' => $phone, 'konten_sms' => $rd, 'cmd' => 'sendsms', 'id_produk' => 'FTDEP'));
+            return array('rc' => '00', 'rd' => 'success','data'=>array('description'=> $rd));
+        } 
+        else if($rc==='01')
+        {
+            $rd = 'Silahkan ulangi kembali, Proses tidak berhasil';
+        } 
+        else if($rc==='07')
+        {
+            $rd =  'Tiket deposit anda masih aktif ' . $rd;
+        } 
+        
+        HttpConnect::sendSms(array('nohp' => $phone, 'konten_sms' => $rd, 'cmd' => 'sendsms', 'id_produk' => 'FTDEP'));
+       
+        return array('rc' => $rc, 'rd' => $rd);
+    }
+
+}

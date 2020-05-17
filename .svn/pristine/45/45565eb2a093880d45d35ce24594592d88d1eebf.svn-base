@@ -1,0 +1,40 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\APIController;
+
+class HolidayResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Flight Message.
+     * 
+     * @var FlightMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $holidays = $apiController->db->query("SELECT * FROM setting_menu_reminder_holiday WHERE EXTRACT(YEAR FROM tanggal_libur) = ?", [$apiController->request->year])->fetchAll();
+
+        if(count($holidays) > 0)
+        {
+            foreach($holidays AS $holiday)
+            {
+                $object = new \stdClass();
+
+                $object->date = $holiday["tanggal_libur"];
+                $object->note = $holiday["keterangan"];
+                
+                $apiController->response->data[] = $object;
+            }
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "Holiday is empty.");
+        }
+    }
+}

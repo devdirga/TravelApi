@@ -1,0 +1,53 @@
+<?php
+
+namespace Travel\Flight;
+
+use Travel\Libraries\APIController;
+//use Travel\Libraries\Message\FlightMessage;
+//use Travel\Libraries\Parser\Flight\AirportResponseParser;
+use Travel\Libraries\Utility;
+
+class AirportController extends APIController
+{
+    protected $invoking = "Airport Flight";
+
+    public function indexAction()
+    {
+
+
+        foreach ((array) json_decode(Utility::$airport) as $key => $value) {
+            $this->response->data[] = array(
+                'code' => $key,
+                'name' => $value->airportName,
+                'bandara' => $value->cityName,
+                'group' => (intval($value->isInternational) === 1) ? 'Internasional' : 'Domestik'
+            );
+        }
+
+
+        /* Code for generate airport list
+         
+        $data = array();
+        foreach (json_decode(json_encode($this->db->fetchAll("SELECT city_code, city_name, timezone, city_airp, is_international  FROM mt_destination"))) as $value)
+        {
+            $data[$value->city_code] = array(
+                'airportName' => $value->city_name,
+                'cityName' => str_replace(array("'", "\"", "&quot;"), '', htmlspecialchars($value->city_airp)) ,
+                'timeZone' => $value->timezone,
+                'isInternational' => $value->is_international
+            );
+        }
+        echo json_encode($data);
+        die();
+
+        */
+
+        /*
+
+        $message = new FlightMessage($this);
+        
+        AirportResponseParser::instance()->parse($message)->into($this);
+        
+         *          */
+    }
+}

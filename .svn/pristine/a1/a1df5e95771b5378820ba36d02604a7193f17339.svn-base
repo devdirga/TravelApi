@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\Hotel;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\Parser\Hotel\NearbyResponseParser;
+
+class NearbyController extends APIController
+{
+    protected $invoking = "Hotel Nearby Hotel";
+    
+    public function indexAction()
+    {
+        $message = new HotelMessage($this);
+        
+        NearbyResponseParser::instance()->parse($message)->into($this);
+    }
+}

@@ -1,0 +1,29 @@
+<?php
+
+namespace Travel\Flight;
+
+use Travel\Libraries\APIController;
+use Phalcon\Db;
+
+class AirlineController extends APIController
+{
+
+    protected $invoking = "Airlines Flight";
+
+    public function indexAction()
+    {
+
+        $airlines = $this->db->fetchAll("SELECT * FROM mt_produk WHERE id_produk like 'TP%' and id_group_produk=29", Db::FETCH_OBJ);
+
+        if (count($airlines) > 0) {
+            foreach ($airlines as $airline) {
+                $this->response->data[] = array(
+                    'airline' => $airline->id_produk,
+                    'airlineName' => $airline->produk,
+                );
+            }
+        } else {
+            $this->response->setStatus("01", "Airlines is empty.");
+        }
+    }
+}

@@ -1,0 +1,144 @@
+<?php
+
+namespace Fastravel\Libraries;
+
+class Response
+{
+    public $data = null;
+    public $rc = "00";
+    public $rd = "Success";
+    public $token;
+        
+    public function __construct()
+    {
+        $this->data = array();
+    }
+    
+    public function setStatus($rc, $rd)
+    {
+        if($rc != "00")
+        {
+            unset($this->data);
+        }
+        
+        $this->rc = $rc;
+        $this->rd = $rd;
+    }
+    
+    public function setDataAsObject()
+    {
+        $this->data = new \stdClass();
+    }
+    
+    public function setDataAsArray()
+    {
+        $this->data = array();
+    }
+    
+    public function setToken($token)
+    {
+        $this->token = $token;
+    }
+    public function mask($rc,$data)
+    {
+        
+        $rd = $this->msg_global($rc); // Global Filter 
+        
+        switch($data->response->data->id_produk) // Filter Spesifik Produk
+        {
+            // Pesawat
+            case 176: 
+            case 68:
+            case 175:
+            case 135:
+            case 105:
+            case 178:
+            case 92:
+            case 95:
+                $rd = $this->msg_flight($rc);
+            break;
+        
+            case 136: // Hotel
+                $rd = $this->msg_hotel($rc);
+            break;
+            case 118: // Kereta
+                $rd = $this->msg_kereta($rc);
+            break;
+            case 171: // Kapal
+                $rd = $this->msg_kapal($rc);
+            break;
+            case 138: // Wisata
+                $rd = $this->msg_wisata($rc);
+            break;
+            case 123: // Travel
+                $rd = $this->msg_travel($rc);
+            break;
+            default:                
+            break;
+        }
+       return $rd;
+    }
+    public function msg_global($rc)
+    {
+        switch($rc){
+            case 00: $rd = 'Success'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_flight($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_train($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_travel($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_hotel($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_wisata($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+    public function msg_kapal($rc)
+    {
+        switch($rc){
+            //case 00: $rd = 'awesome'; break;
+            default: break;
+            
+        }
+        return $rd;
+    }
+}

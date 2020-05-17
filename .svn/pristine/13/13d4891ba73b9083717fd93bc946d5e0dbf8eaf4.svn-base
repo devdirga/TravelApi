@@ -1,0 +1,56 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\SignInResponseParser;
+use Fastravel\Libraries\Utility;
+
+class SignInController extends APIController
+{
+    protected $invoking = "Sign In App";
+    
+    public function indexAction()
+    {   
+        
+        $this->setMTI("SIGNON");
+        $this->setProductCode("SIGNON");
+        
+        $this->setOutletId($this->request->outletId);
+        $this->setPin($this->request->pin);
+        $this->setKey($this->request->key);
+        
+        $message = new AppMessage($this);
+        
+        $message->set(AppMessage::FIELD_LOKET_ID, $this->request->outletId);
+        $message->set(AppMessage::FIELD_PIN, $this->request->pin);
+        $message->set(AppMessage::FIELD_VIA, "WEB");
+        
+        if(isset($this->request->key) && $this->request->key ==='FASTPAY')// untuk cek login requestkey//
+        { 
+            $message->set(AppMessage::FIELD_TOKEN, $this->request->key);
+            $this->sendToCore($message); 
+        }else if (Utility::isPartner($this->request->outletId)){ 
+            $message->set(AppMessage::FIELD_TOKEN, 'FASTPAY');//
+            $this->sendToCore($message);
+        }else{
+            if($this->getOutletToken($this->request->outletId,$this->request->key)==='FASTPAY')
+            {    
+                $message->set(AppMessage::FIELD_TOKEN, $this->request->key);
+                $this->sendToCore($message);   
+            }
+            else 
+            {   
+                $message->set(AppMessage::FIELD_STATUS, "02");
+                $message->set(AppMessage::FIELD_KETERANGAN, "Key Anda tidak cocok / telah kadaluarsa");
+            }
+        }
+        SignInResponseParser::instance()->parse($message)->into($this);
+    }
+    
+    public function is_partner($outletId){
+        return substr($outletId,0,2) == "HH";
+    }
+    
+}

@@ -1,0 +1,39 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Models\Outlet;
+
+class AccountResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $outlet = Outlet::take($apiController->getOutletId());
+        
+        if($outlet != null)
+        {
+            $apiController->response->setDataAsObject();
+            
+            unset($outlet->pin);
+            unset($outlet->token);
+            
+            $apiController->response->data = $outlet;
+            $apiController->response->data->pin = $apiController->getPin();
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "Outlet is not found.");
+        }
+    }
+}

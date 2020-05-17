@@ -1,0 +1,23 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Flight;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\APIController;
+
+class InsuranceResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Flight Message.
+     * 
+     * @var FlightMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        
+    }
+}

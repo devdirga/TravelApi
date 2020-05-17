@@ -1,0 +1,76 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\App;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Models\Outlet;
+
+use Phalcon\Mvc\Controller;
+use Lcobucci\JWT\Parser;
+use Lcobucci\JWT\Signer\Hmac\Sha256;
+use Lcobucci\JWT\Builder;
+
+use Fastravel\Libraries\Response;
+use Fastravel\Libraries\HttpConnect;
+
+class SignInResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * AppMessage.
+     * 
+     * @var AppMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(AppMessage::FIELD_STATUS);
+        $rd = $this->message->get(AppMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            $balance = Outlet::take($apiController->getOutletId(), "balance");
+
+            $apiController->response->setDataAsObject();
+
+            $apiController->response->data->balance = $balance;
+
+            $apiController->createToken($this->message->get(AppMessage::FIELD_LOKET_ID), $this->message->get(AppMessage::FIELD_PIN), $this->message->get(AppMessage::FIELD_TOKEN));
+        
+            $apiController->response->data->nama_logo = "fastravel.bmp";
+            
+            //$apiController->response->data->cek_sum_logo = md5_file($apiController->config->path_assets . $apiController->config->logo);
+            
+            $apiController->response->data->cek_sum_logo = md5_file("http://api.fastravel.co.id/protected/Asset/Img/fastravel.bmp");
+            
+            $status = $apiController->dbmysql->query("SELECT id_outlet from fcm_user WHERE id_outlet = ?",[$apiController->request->outletId]); 
+
+            //$status->setFetchMode(Db::FETCH_OBJ);     
+
+            if( sizeof($status->fetch()) > 0 )
+            {
+                
+                $querygcm = $apiController->dbmysql->query("SELECT * from fcm_user WHERE fcmregid = ?",[$apiController->request->fcmregid]);
+                
+                if( sizeof($querygcm->fetch()) == 0 ){
+                    
+                    $apiController->dbmysql->query("UPDATE fcm_user SET fcmregid = ? WHERE id_outlet = ?",[$apiController->request->fcmregid,$apiController->request->outletId]);
+                }
+                
+            }
+            else
+            {
+                $apiController->dbmysql->query("INSERT INTO fcm_user (id_outlet,fcmregid) VALUES (?,?)",[$apiController->request->outletId,$apiController->request->fcmregid]);    
+            }
+
+            
+            
+            
+        }
+
+        $apiController->response->setStatus($rc, $rd);
+    }
+}

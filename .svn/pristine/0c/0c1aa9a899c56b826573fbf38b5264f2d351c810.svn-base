@@ -1,0 +1,461 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Flight;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+
+class SearchResponseParser extends BaseResponseParser implements ResponseParser{
+    
+    protected $message;
+    
+    protected static $airlinelogo = array(
+        "JQ"=>"http://static.jetstar.com/images/logo_footer.png",
+        "TR"=>"http://www.tigerair.com/_templates/img/tigerair-id-logo.gif",
+        "TN"=>"http://static.bebasbayar.com/maskapai/logo-trigana.png",
+        "MV"=>"http://static.bebasbayar.com/maskapai/logo-transnusa.png",
+        "QG-API"=>"http://www.fastpay.co.id/icon/status-qg.png",
+        "SJ"=>"http://static.bebasbayar.com/maskapai/logo-sriwijaya.png",
+        "SY"=>"http://static.bebasbayar.com/maskapai/logo-sky.png",
+        "MZ"=>"http://static.bebasbayar.com/maskapai/logo-merpati.png",
+        "RI"=>"http://static.bebasbayar.com/maskapai/logo-mandala.png",
+        "JT"=>"http://static.bebasbayar.com/maskapai/logo-lionair.png",
+        "KP"=>"http://static.bebasbayar.com/maskapai/logo-kalstar.png",
+        "GA"=>"http://static.bebasbayar.com/maskapai/logo-garuda.png",
+        "XN"=>"http://static.bebasbayar.com/maskapai/logo-expressair.png",
+        "QG"=>"http://static.bebasbayar.com/maskapai/logo-citilink.png",
+        "QZ"=>"http://static.bebasbayar.com/maskapai/logo-airasia.png",
+        "ID"=>"https://static.scash.bz/fastravel/asset/maskapai/TPID.png",
+        "IW"=>"https://static.scash.bz/fastravel/asset/maskapai/TPIW.png"
+    );
+    
+    protected static $airlineKhusus=array("TPQG","TPSJ");
+
+    public function into(APIController $apiController){
+        
+        $rc=$this->message->get(FlightMessage::FIELD_STATUS);
+        $rd=$this->message->get(FlightMessage::FIELD_KETERANGAN);
+        
+        if($rc==="00"){
+            if(trim($this->message->get(FlightMessage::FIELD_MESSAGE)) != ""){
+                if(strpos(trim($this->message->get(FlightMessage::FIELD_MESSAGE), "|#"), "|#")){
+                    $schedules = explode("|#",trim($this->message->get(FlightMessage::FIELD_MESSAGE),"|#"));
+                }else{
+                    $schedules = explode("#",trim($this->message->get(FlightMessage::FIELD_MESSAGE),"#"));
+                }                
+                $this->handleIteration($apiController, $schedules);
+            }
+        }
+        
+        if($apiController->request->airline==="TPQG"){
+            $apiController->response->data=self::normalize($apiController->response->data);
+        }
+        
+        $apiController->response->mid=intval($this->message->get(FlightMessage::FIELD_MID));
+        $apiController->response->setStatus($rc,$rd);
+    }
+    
+    private function handleIteration(APIController $apiController, $schedules)
+    {
+        $i = 0;
+        
+        foreach($schedules as $schedule){
+            
+            $deptArrDate = array(
+                'dapartureDate' => $apiController->request->departureDate,
+                'arrivalDate' => $apiController->request->departureDate,
+                'departTime' => '00:00',
+                'arrivalTime' => '00:00',
+                'depart' => '',
+                'arrival' => ''
+            );
+            
+            //if(self::isNormal($schedule) && self::isShow($apiController->request->departureDate, $schedule)){
+            if(in_array($apiController->request->airline, self::$airlineKhusus) ? self::isShow($apiController->request->departureDate, $schedule) : (self::isNormalClass($schedule) && self::isShow($apiController->request->departureDate, $schedule))){    
+                if(!strpos($schedule, "XX")){
+                    $apiController->response->data[$i] = new \stdClass();
+                    $apiController->response->data[$i]->classes = array();
+
+                    if(strpos($schedule, "::")){
+                        $this->iterateTransit($apiController, $schedule, $i, $deptArrDate);
+                    }else{
+                        $items = explode("|", $schedule);
+
+                        $apiController->response->data[$i] = new \stdClass();
+
+                        $apiController->response->data[$i]->classes = array();
+
+                        $this->iterate(0, $items, $apiController, $apiController->response->data[$i], $deptArrDate, true);
+                    }
+
+                    $apiController->response->data[$i]->departureDate = $apiController->request->departureDate;
+
+                    //$apiController->response->data[$i]->arrivalDate = self::getArrivalDate((in_array($apiController->request->airline,array('TPSJ','TPGA') )  ) ? $apiController->response->data[$i] : $apiController->response->data[$i]->classes, $apiController->request->departureDate);
+                    $apiController->response->data[$i]->arrivalDate = $deptArrDate["arrivalDate"];
+                    
+                    $apiController->response->data[$i]->duration = self::getDuration((in_array($apiController->request->airline,array('TPQG','TPTR','TPSJ'))) ? $apiController->response->data[$i] : $apiController->response->data[$i]->classes);
+                    
+                    if(strpos($apiController->response->data[$i]->detailTitle[0]->flightIcon, "ID.png") !== false || strpos($apiController->response->data[$i]->detailTitle[0]->flightIcon, "IW.png") !== false){
+                        $apiController->response->data[$i]->airlineIcon = $apiController->response->data[$i]->detailTitle[0]->flightIcon;
+                    }else{
+                        $apiController->response->data[$i]->airlineIcon = self::$airlinelogo[substr($apiController->request->airline, 2,2)];
+                    }
+                    
+                    if( substr($apiController->response->data[$i]->title, 0, 2 ) === "ID" ||  substr($apiController->response->data[$i]->title, 0, 2 ) === "IW"){
+                        $apiController->response->data[$i]->airlineName = self::getAirlineName(substr($apiController->response->data[$i]->title, 0, 2 ));
+                    } else {
+                        $apiController->response->data[$i]->airlineName = self::getAirlineName(substr($apiController->request->airline, 2,2));
+                    }
+                    
+                    //$apiController->response->data[$i]->airlineIcon = self::$airlinelogo[substr($apiController->request->airline, 2,2)];
+                    //$apiController->response->data[$i]->airlineName = self::getAirlineName(substr($apiController->request->airline, 2,2));
+                    $apiController->response->data[$i]->airlineCode = $apiController->request->airline;
+
+                    $i++;
+                }
+                
+            }
+            
+            
+        }
+    }
+    
+    private function iterateTransit($apiController, $schedule, $iteration, &$deptArrDate)
+    {
+        $i = 0;
+        
+//        $deptArrDate = array(
+//                'dapartureDate' => $apiController->request->departureDate,
+//                'arrivalDate' => $apiController->request->departureDate,
+//                'departTime' => '00:00',
+//                'arrivalTime' => '00:00',
+//                'depart' => '',
+//                'arrival' => ''
+//            );
+        
+        $apiController->response->data[$iteration]->isTransit = true;
+        
+        foreach(explode("::", $schedule) as $explode)
+        {
+            $explodeValue = trim($explode, "|");
+
+            $items = explode("|", $explodeValue);
+
+            $this->iterate($i, $items, $apiController, $apiController->response->data[$iteration], $deptArrDate,$i == 0 ? true : false);
+
+            $i++;
+        }
+    }
+    
+    private function iterate($flightNumber, $items, APIController $apiController, $schedule, &$deptArrDate,$isFirstFlight = true)
+    {
+        $isFirst = true;
+        
+        $schedule->classes[$flightNumber] = array();
+        
+        $airports = (array)json_decode(Utility::$airport);
+        
+        $isThereHeader = false;
+        
+        $i = 0;
+        
+        $title = '';
+        
+        foreach($items as $item){
+            $upLimit = ($isThereHeader) ? 2 : 1 ;
+            if($i == 0 && $isFirstFlight){
+                $schedule->title = Utility::sanitizeFlightTitle($item);
+                $title = Utility::sanitizeFlightTitle($item);
+                $schedule->isTransit = strpos($item, ">") ? true : false;
+                $schedule->detailTitle = self::getDetailRute($airports, $schedule->title, $apiController->request->departureDate);
+                $schedule->cityTransit = self::getCityTransit($schedule->title);
+                $isThereHeader = true;
+            }else{
+                if(isset($apiController->request->isLowestPrice) && $apiController->request->isLowestPrice == true && $i == $upLimit){
+                    break;
+                }                
+                $exploded = explode(";", str_replace('bimasakti', '|', str_replace('CAPINGOI', '^', $item)));
+                
+                $object = new \stdClass();
+                
+                $timeArrival = $exploded[4] == "" ? $exploded[9] : $exploded[4];
+                $arrival = $exploded[12];                
+                if(in_array($apiController->request->airline, ["TPGA","TPQZ","TPTR"])){
+                    $timeArrival = $exploded[9];
+                }
+                
+                //for Citilink
+                /* 
+                if($schedule->isTransit && in_array($apiController->request->airline, ['TPQG']) && sizeof(explode(';', $item), TRUE) > 15 )
+                {
+                    $tmparr = explode(';', $item);
+                    $arrival = trim($tmparr[sizeof($tmparr, TRUE)-1]);
+                }  
+                */
+                
+                if(in_array($apiController->request->airline, ['TPSJ'])){
+                    if($isFirst){
+                        if($deptArrDate['departTime'] === '00:00'){
+                            $timeTitle = explode(' ', trim(explode('>', $title)[0]));
+                            $time = explode('-', trim($timeTitle[sizeof($timeTitle, TRUE)-1]));
+                            $timeArrival = trim($time[1]);
+                        }
+                    }
+                }
+                
+                $object->availability = intval($exploded[0]);
+                $object->seatKey = $exploded[1];
+                $object->class = $exploded[2];
+                $object->price = intval($exploded[3]);
+                $object->depatureTime = $exploded[8];
+                $object->arrivalTime = $timeArrival;
+                $object->flightCode = $exploded[10];
+                $object->departure = $exploded[11];
+                $object->departureName = $airports[$exploded[11]]->cityName;
+                //$object->arrival = $exploded[12];
+                $object->arrival = $arrival;
+                $object->arrivalName = $airports[$arrival]->cityName;
+                //$object->isInternational = intval($airports[$exploded[11]]->isInternational);
+                $object->isInternational = (intval($airports[$exploded[11]]->isInternational) ||  intval($airports[$exploded[12]]->isInternational)) ? 1 : 0 ;
+                $object->departureTimeZone = $airports[$exploded[11]]->timeZone;
+                $object->arrivalTimeZone = $airports[$exploded[11]]->timeZone;
+                $object->departureTimeZoneText = $airports[$exploded[11]]->gmtZone;
+                $object->arrivalTimeZoneText = $airports[$exploded[12]]->gmtZone;
+                $object->seat = str_replace('bimasakti', '|', str_replace('CAPINGOI', '^', $item));
+                $object->duration = Utility::getDurations($exploded[11],$exploded[12],$exploded[8],$timeArrival);                
+                $schedule->classes[$flightNumber][] = $object;
+                
+                if($isFirst){ 
+                    if($deptArrDate['departTime'] === '00:00'){
+                        $deptArrDate['departTime'] = $exploded[8];
+                        $deptArrDate['arrivalTime'] = $timeArrival;
+                        $deptArrDate['depart'] = $exploded[11];
+                        $deptArrDate['arrival'] = $exploded[12];
+                        $departureDateLast =  date('d-m-Y', strtotime($apiController->request->departureDate));
+                    }else{
+                        $departureDateLast = Utility::getArrivalDates('SUB', 'SUB', date('d-m-Y', strtotime($deptArrDate['arrivalDate'])), $deptArrDate['arrivalTime'], $exploded[8]);
+                        $deptArrDate['departTime'] = $deptArrDate['arrivalTime'];
+                        $deptArrDate['arrivalTime'] = $timeArrival;
+                    }
+                    $object->departureDate = date('Y-m-d', strtotime($departureDateLast));
+                    $object->arrivalDate = date('Y-m-d', strtotime(Utility::getArrivalDates($exploded[11], $exploded[12], $departureDateLast, $exploded[8], $timeArrival)));
+                    $deptArrDate['arrivalDate'] = $object->arrivalDate;
+                    $isFirst = false;
+                }                
+            }
+
+            $i++;
+        }
+    }
+    
+    private static function isShow($depDate,$schedule){
+        $setting = 0;
+        if(strpos($schedule,">")!==FALSE){
+            $data = explode(" ", trim(explode(">", $schedule)[0]));
+            $clock = explode("-", $data[sizeof($data, TRUE)-1]);
+            $depTime = $clock[0];
+        }else{
+            $data = explode(" ",trim(explode("|", $schedule)[0]));
+            $depTime = explode("-", $data[sizeof($data, TRUE)-1])[0];
+        }
+        $selisih_jam = ceil(((strtotime(date('Y-m-d H.i.s', strtotime(date("d-m-Y", strtotime($depDate)) . ' ' . $depTime .':00'))) - strtotime(date('Y-m-d H.i.s'))) / 86400) * 24);
+        return (intval($selisih_jam) > intval($setting)) ? TRUE : FALSE ;
+    }
+    
+    public static function getCityTransit($detail){
+        $city = '';
+        foreach (explode('>', trim($detail)) as $key => $value){
+            $city .= (intval($key) > 0) ? explode(' ', trim($value))[sizeof(explode(' ', trim($value)), TRUE) - 3] . ',' : '';
+        }        
+        return substr($city, 0, strlen($city) - 1);
+    }
+    
+    public static function getDetailRute($airport, $detail, $departureDate){   
+        $s = array();        
+        $starTransit = '0';
+        $isFirst = true;
+        $deptDate = $departureDate;
+        $arrDate = $departureDate;
+        $deptTime = '00:00';
+        $arrTime = '00:00';
+        
+        $tmpDate = $departureDate;
+        
+        foreach (explode('>', trim($detail)) as $value){
+            $code = explode(' ', trim($value));
+            $time = explode('-', $code[sizeof($code, TRUE)-1]);
+            $transitInterval = '0j0m';
+            if($starTransit !== '0'){
+                $transitInterval = Utility::getDurations($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], $starTransit, $time[0]);
+            }            
+            //getFlightCode
+            $f = 0 ;
+            $flightCode = '';
+            foreach ($code as $v){
+                if($f <=  ( sizeof($code, TRUE) ) - 4 ){
+                    $flightCode .= $v . ' ';
+                }
+                $f++;
+            }
+            
+            $tmpAirport =  $code[sizeof($code, TRUE)-2];
+            if($isFirst){
+                $arrDate = Utility::getArrivalDates($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], date('d-m-Y', strtotime($deptDate)), $time[0], $time[1]);
+                $deptTime = $time[0];
+                $arrTime = $time[1];
+                $tmpDate = $arrDate;
+            }else{
+                //$tmpDate = Utility::getArrivalDates($tmpAirport, $code[sizeof($code, TRUE)-3], date('d-m-Y', strtotime($tmpDate)), $arrTime,$time[0]);
+                $tmpDate = Utility::getArrivalDates($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-3], date('d-m-Y', strtotime($tmpDate)), $arrTime,$time[0]);
+                $deptDate = $tmpDate;
+                $arrDate = Utility::getArrivalDates($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], date('d-m-Y', strtotime($tmpDate)), $time[0],$time[1]);
+                $tmpDate = $arrDate;
+                //$deptDate = Utility::getArrivalDates($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], date('d-m-Y', strtotime($arrDate)), $arrTime, $time[0]);
+                //$arrDate = Utility::getArrivalDates($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], date('d-m-Y', strtotime($arrDate)), $time[0], $time[1]);
+                $deptTime = $time[0];
+                $arrTime = $time[1];
+            }            
+            //https://static.scash.bz/fastravel/asset/maskapai/TP
+            //https://static.scash.bz/fastravel/assets/images/flighticons/
+            $s[] = (object) array(
+                        "flightIcon" => "https://static.scash.bz/fastravel/asset/maskapai/TP". substr($code[0], 0,2) .".png",
+                        "flightName" => self::getAirlineName(substr($code[0], 0,2)),
+                        "transitTime" => $transitInterval,
+                        "flightCode" => trim($flightCode),
+                        "origin" => $code[sizeof($code, TRUE)-3],
+                        "originName" => $airport[$code[sizeof($code, TRUE)-3]]->cityName,
+                        "destination" => $code[sizeof($code, TRUE)-2],
+                        "destinationName" => $airport[$code[sizeof($code, TRUE)-2]]->cityName,
+                        "depart" => $time[0],
+                        "arrival" => $time[1],
+                        "departureDate" =>  date('Y-m-d', strtotime($deptDate)) ,
+                        "durationDetail" => Utility::getDurations($code[sizeof($code, TRUE)-3], $code[sizeof($code, TRUE)-2], $time[0], $time[1])
+            );
+            $starTransit = $time[1];
+            $isFirst = false;
+        }
+        return $s;
+    }
+    
+    public static function getArrivalDate($flights, $departureDate){
+        if (isset($flights->classes)){
+            $arrayTime = array();
+            $arrayAirport = array();
+            foreach (explode('>', trim($flights->title)) as $value){
+                $component = explode(' ', trim($value));
+                $time = explode('-', trim($component[sizeof($component) - 1]));
+                $arrayAirport[] = trim($component[sizeof($component)-3]);
+                $arrayAirport[] = trim($component[sizeof($component)-2]);
+                $arrayTime[] = $time[0];
+                $arrayTime[] = $time[1];
+            }
+            return date("Y-m-d", strtotime(Utility::getArrivalDates($arrayAirport[0], $arrayAirport[sizeof($arrayAirport)-1], date("d-m-Y", strtotime($departureDate)) , $arrayTime[0], $arrayTime[sizeof($arrayTime) - 1]))); 
+        }else{
+            return date("Y-m-d", strtotime(Utility::getArrivalDates($flights[0][0]->departure, $flights[sizeof($flights)-1][0]->arrival, date("d-m-Y", strtotime($departureDate)), $flights[0][0]->depatureTime, $flights[sizeof($flights)-1][0]->arrivalTime)));
+        }
+    } 
+    
+    public static function getDuration($flights){   
+        if (isset($flights->classes)){   
+            $arrayTime = array();
+            $arrayAirport = array();
+            foreach (explode('>', trim($flights->title)) as $value){
+                $component = explode(' ', trim($value));
+                $time = explode('-', trim($component[sizeof($component) - 1]));
+                $arrayAirport[] = trim($component[sizeof($component)-3]);
+                $arrayAirport[] = trim($component[sizeof($component)-2]);
+                $arrayTime[] = $time[0];
+                $arrayTime[] = $time[1];
+            }
+            return Utility::getDurations($arrayAirport[0], $arrayAirport[sizeof($arrayAirport)-1], $arrayTime[0], $arrayTime[sizeof($arrayTime) - 1]);            
+        }else{   
+            return Utility::getDurations($flights[0][0]->departure, $flights[sizeof($flights)-1][0]->arrival, $flights[0][0]->depatureTime, $flights[sizeof($flights)-1][0]->arrivalTime);
+        }   
+    }
+    
+    public static function getAirlineName($data){
+        switch ($data){
+            case 'GA':return 'Garuda Indonesia';
+            case 'SJ':return 'Sriwijaya';
+            case 'IN':return 'Nam Air';
+            case 'SJ':return 'Sriwijaya';
+            case 'JT':return 'Lion Air';
+            case 'IW':return 'Wings Air';
+            case 'ID':return 'Batik Air';
+            case 'QZ':return 'AirAsia';
+            case 'QG':return 'Citilink';    
+            case 'XN':return 'Xpress Air';
+            case 'TN':return 'Trigana Air';
+            case 'KP':return 'Kalstar';
+            case 'MV':return 'Transnusa';
+            case 'JQ':return 'Jetstar';
+            case 'TR':return 'Tiger Air';
+            default:return $data;
+        }        
+    }
+    
+    public static function normalize($data){
+        $airports = (array)json_decode(Utility::$airport);
+        foreach ($data as $value){
+            if(sizeof($value->classes) < sizeof($value->detailTitle)){   
+                $arrayClass = $value->classes;
+                for($i=sizeof($value->classes) ; $i< sizeof($value->detailTitle) ; $i++){
+                    $arrayClass[] = array(                
+                                (object) array(
+                                    'availability' => 1,
+                                    'seatKey' => $arrayClass[0][0]->seatKey,
+                                    'class' => '',
+                                    'price' => 0,
+                                    'depatureTime' => $value->detailTitle[$i]->depart,
+                                    'arrivalTime' => $value->detailTitle[$i]->arrival,
+                                    'flightCode' => $value->detailTitle[$i]->flightCode,
+                                    'departure' => $value->detailTitle[$i]->origin,
+                                    'departureName' => $airports[$value->detailTitle[$i]->origin]->cityName,
+                                    'arrival' => $value->detailTitle[$i]->destination,
+                                    'arrivalName' => $airports[$value->detailTitle[$i]->destination]->cityName,
+                                    'isInternational' => ((intval($airports[$value->detailTitle[$i]->origin]->isInternational) ||  intval($airports[$value->detailTitle[$i]->destination]->isInternational)) ? 1 : 0),
+                                    'departureTimeZone' => $airports[$value->detailTitle[$i]->origin]->timeZone,
+                                    'arrivalTimeZone' => $airports[$value->detailTitle[$i]->destination]->timeZone,
+                                    'departureTimeZoneText' => $airports[$value->detailTitle[$i]->origin]->gmtZone,
+                                    'arrivalTimeZoneText' => $airports[$value->detailTitle[$i]->destination]->gmtZone,
+                                    'seat' => $arrayClass[0][0]->seat,
+                                    'duration' => $value->detailTitle[$i]->durationDetail,
+                                    'departureDate' => $value->detailTitle[$i]->departureDate,
+                                    'arrivalDate' => date('Y-m-d', strtotime(Utility::getArrivalDates($value->detailTitle[$i]->origin, $value->detailTitle[$i]->destination, date('d-m-Y', strtotime($value->detailTitle[$i]->departureDate)), $value->detailTitle[$i]->depart, $value->detailTitle[$i]->arrival)))  
+                        )                
+                    );
+                }
+                $value->classes = $arrayClass;
+            }
+        }
+        return $data;
+    }
+    
+    public static function isNormalClass($schedule){
+        if(strpos($schedule,">")!==FALSE){
+            if(strpos($schedule,"::")!==FALSE){
+                $catchEmpty=FALSE;
+                foreach (explode("::",trim(str_replace(explode("|", trim($schedule,"|"))[0],"",$schedule),"|")) as $value){
+                    if(empty($value)){
+                        $catchEmpty=TRUE;
+                    }
+                }
+                return ($catchEmpty)?FALSE:TRUE;
+            }else{
+                return FALSE;
+            }
+        }else{
+            $catchEmpty=FALSE;
+            foreach(explode("|",trim(str_replace(explode("|", trim($schedule,"|"))[0],"",$schedule),"|")) as $value){
+                if(empty($value)){
+                    $catchEmpty=TRUE;
+                }
+            }
+            return ($catchEmpty)?FALSE:TRUE;
+        }
+    }
+    
+}

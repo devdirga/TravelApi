@@ -1,0 +1,34 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Train;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\APIController;
+
+class PaymentOnlineBookResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Train message response from core.
+     * 
+     * @var TrainMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(TrainMessage::FIELD_ERR_CODE);
+        $rd = $this->message->get(TrainMessage::FIELD_ERR_MSG);
+        
+        //$apiController->response->setStatus($rc == "0" ? "00" : $rc, $rc == "00" ? "Success" : $rd);
+        if(isset($apiController->request->simulateSuccess) && $apiController->request->simulateSuccess == true)
+        {
+            $apiController->response->setStatus("00", "Sukses.");
+        }
+        else if(isset($apiController->request->simulateSuccess) && $apiController->request->simulateSuccess == false)
+        {
+            $apiController->response->setStatus("01", "Gagal.");
+        }
+    }
+}

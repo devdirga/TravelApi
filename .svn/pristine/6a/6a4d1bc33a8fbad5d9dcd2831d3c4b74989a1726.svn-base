@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\Wisata;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\Wisata\SearchResponseParser;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search Wisata";
+    
+    public function indexAction()
+    {
+        $message = new WisataMessage($this);
+        
+        SearchResponseParser::instance()->parse($message)->into($this);   
+    }
+}

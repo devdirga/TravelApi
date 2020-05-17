@@ -1,0 +1,208 @@
+<?php
+
+namespace Fastravel\Libraries\Lists;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+use Phalcon\Mvc\Controller;
+use Phalcon\Db;
+
+class ListPESAWAT extends Controller {
+
+    protected $invoking = "List Pesawat";
+    
+    public static function init($implodedata) 
+    {
+        return explode("#", $implodedata);
+    }
+
+    public function initObject(APIController $api, $data) 
+    {
+        $airport = (array)json_decode(Utility::$airport);
+        
+        $additionalData =  array(
+            array("key" => "Kode Booking", "value" => $data->bill_info1),
+            array("key" => "Maskapai", "value" => Utility::getProductName($api, $data->id_produk)),
+            array("key" => "Rute", "value" =>  $airport[$data->bill_info11]->airportName . " - " . $airport[$data->bill_info12]->airportName),
+            array("key" => "Waktu Keberangkatan", "value" => str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info22))) ,
+            array("key" => "Waktu Kedatangan", "value" => ($data->bill_info25==="") ? str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info23)) : (  ($data->bill_info78) ? str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info78)) : str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info25)))),
+            array("key" => "Kode Penerbangan", "value" => $data->bill_info15),
+            array("key" => "Class", "value" => $data->bill_info66)
+        );
+        //array("key" => "Waktu Kedatangan", "value" => ($data->bill_info25==="") ? str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info23)) : (  ($data->bill_info78) ? str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info78)) : str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info25)))),
+        //array("key" => "Waktu Kedatangan", "value" => str_replace('|', '', self::getDates($data->bill_info13, $data->bill_info23))),
+        
+        foreach(self::getPassengers($data) as $passenger)
+        {
+            array_push($additionalData, array(
+                "key" => "Penumpang " . ucwords(strtolower($passenger["status"])),
+                "value" => ucwords(strtolower($passenger["title"] . " " .$passenger["nama"]))
+                )
+            );
+        }
+        
+        return (object) array(
+                    "additional" => $additionalData,
+                    "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $data->id_transaksi,
+                    "url_struk" => "http://api.fastravel.co.id/app/generate_struk?transaction_id=" . $data->id_transaksi,
+                    "url_image" => "http://static.scash.bz/jadipergi/img/wisata/FA53732/21112016_9313554dd92b6aff2bfe8e09ebc865ca.jpg"
+        );
+    }
+
+    public function initBook(APIController $apiController) 
+    {
+        if(isset($apiController->request->startDate) && isset($apiController->request->endDate)){
+            $addStr = " WHERE transaction_date BETWEEN ? AND ? ";
+            $arrParam = array($apiController->getOutletId(),$apiController->getOutletId(),$apiController->request->startDate, $apiController->request->endDate);
+            //[$apiController->getOutletId(),$apiController->getOutletId()]
+        } else {
+            $addStr = "";
+            $arrParam = array($apiController->getOutletId(),$apiController->getOutletId());
+        }
+        
+        $listBook = array();      
+        foreach ($this->db->fetchAll("WITH transactionData AS("
+                . "SELECT * FROM transaksi "
+                . "WHERE jenis_transaksi = 0 AND response_code='00' AND id_produk IN (SELECT id_produk FROM ft_mt_produk WHERE id_produk like 'TP%')  AND id_outlet = ? "
+                . "UNION "
+                . "SELECT * FROM transaksi_backup_non_payment "
+                . "WHERE jenis_transaksi = 0 AND response_code='00' AND id_produk IN (SELECT id_produk FROM ft_mt_produk WHERE id_produk like 'TP%') AND id_outlet = ? "
+                . ")"
+                . "SELECT * FROM transactionData ". $addStr ." ORDER BY time_request DESC",Db::FETCH_OBJ,$arrParam) as $value)
+        //foreach ($this->db->fetchAll("SELECT * FROM fmss.transaksi INNER JOIN fmss.mt_produk ON fmss.transaksi.id_produk = fmss.mt_produk.id_produk WHERE fmss.transaksi.jenis_transaksi = 0 AND fmss.transaksi.response_code='00' AND fmss.mt_produk.id_produk like  'TP%' AND fmss.transaksi.id_outlet = ? ORDER BY id_transaksi DESC ", Db::FETCH_OBJ, [ $apiController->getOutletId() ]) as $value) 
+        {   
+            
+            $dPayment = $this->db->fetchAll("WITH transactionData AS("
+                . "SELECT * FROM transaksi "
+                . "WHERE jenis_transaksi = 1 AND response_code='00' AND  id_produk IN (SELECT id_produk FROM ft_mt_produk WHERE id_produk like 'TP%')  AND id_outlet = ? "
+                . "UNION "
+                . "SELECT * FROM transaksi_backup "
+                . "WHERE jenis_transaksi = 1 AND response_code='00' AND id_produk IN (SELECT id_produk FROM ft_mt_produk WHERE id_produk like 'TP%') AND id_outlet = ? "
+                . ")"
+                . "SELECT * FROM transactionData WHERE bill_info1 = ? ORDER BY time_request DESC",Db::FETCH_OBJ,[$apiController->getOutletId(),$apiController->getOutletId(),$value->bill_info1]);
+                
+            if(count($dPayment)<1){
+            
+            
+            if(!((date("Y-m-d H:i:s") >= $value->bill_info31 ) ? 1: 0))  //is expired?
+            {
+                $departDates = self::getDates($value->bill_info13, $value->bill_info22);
+                $arrivalDates = self::getDates($value->bill_info13, $value->bill_info23);
+                $airport = (array)json_decode(Utility::$airport);
+                
+                $listBook[] = (object) array(
+                            "id_transaksi" => $value->id_transaksi,
+                            "kode_booking" => ($value->bill_info1 === null) ? "" : $value->bill_info1,
+                            "origin" =>  $airport[$value->bill_info11]->airportName,
+                            "destination" => $airport[$value->bill_info12]->airportName,
+                            "tanggal_keberangkatan" => trim(explode('|', $departDates)[1]) ,
+                            "hari_keberangkatan" => trim(explode(',', $departDates)[0]),
+                            "jam_keberangkatan" => $value->bill_info22,
+                            "tanggal_kedatangan" => trim(explode('|', $arrivalDates)[1]),
+                            "hari_kedatangan" => trim(explode(',', $arrivalDates)[0]),
+                            "jam_kedatangan" => $value->bill_info23,
+                            "kode_maskapai" => $value->bill_info15,
+                            "nama_maskapai" => Utility::getProductName($apiController, $value->id_produk),
+                            "penumpang" => self::getPassengers($value),
+                            "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                            "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                            "airlineIcon" => 'https://static.scash.bz/fastravel/assets/images/flighticons/' . substr($value->id_produk, 2, 2)  . '.png',
+                            "subClass" => $value->bill_info66,
+                            "nominal" => $value->nominal,
+                            "nominal_admin" => $value->nominal_admin,
+                            "komisi" =>  Utility::getCommission($apiController,$value->id_transaksi),
+                            "duration" => Utility::getDurations($value->bill_info11, $value->bill_info12, $value->bill_info22, $value->bill_info23),
+                            "expiredDate" => $value->bill_info31
+                );
+            }
+            
+            }
+            
+        }
+
+        return  $listBook;
+    }
+    
+    public function initPAYMENT(APIController $apiController){
+        
+        if(isset($apiController->request->startDate) && isset($apiController->request->endDate)){
+            $arrBind = array( $apiController->getOutletId(), 
+                $apiController->request->startDate, $apiController->request->endDate ,
+                $apiController->getOutletId(), $apiController->request->startDate, $apiController->request->endDate , 100);
+            $where = " AND transaction_date BETWEEN ? AND ? ";
+            $where2 = " AND transaksi_backup.transaction_date BETWEEN ? AND ? ";
+        } else {
+            $arrBind = array( $apiController->getOutletId(), $apiController->getOutletId(), 100 );
+            $where = "";
+            $where2 = "";
+        }
+        
+        //[$apiController->getOutletId(), $apiController->getOutletId(), 100]
+        
+        $result = array();
+        
+        foreach ($this->db->fetchAll("SELECT * FROM fmss.transaksi WHERE fmss.transaksi.jenis_transaksi = 1 AND fmss.transaksi.response_code='00' "
+                . " AND fmss.transaksi.id_produk like 'TP%' AND fmss.transaksi.id_outlet = ? " . $where
+                . " UNION SELECT * FROM transaksi_backup WHERE transaksi_backup.jenis_transaksi = 1 AND transaksi_backup.response_code='00' "
+                . " AND transaksi_backup.id_produk like 'TP%' AND transaksi_backup.id_outlet = ?  ". $where2
+                . "  "
+                . " ORDER BY time_request DESC LIMIT ? ", Db::FETCH_OBJ, $arrBind) as $value) 
+        {
+            $departDates = self::getDates($value->bill_info13, $value->bill_info22);
+            $arrivalDates = self::getDates($value->bill_info13, $value->bill_info23);
+            $airport = (array) json_decode(Utility::$airport);
+            
+            $result[] = (object) array
+                (
+                    'id_transaksi' => $value->id_transaksi,
+                    'kode_booking' => ($value->bill_info1 === null) ? '' : $value->bill_info1,
+                    'origin' =>  $airport[$value->bill_info11]->airportName,
+                    'destination' => $airport[$value->bill_info12]->airportName,
+                    'tanggal_keberangkatan' => trim(explode('|', $departDates)[1]) ,
+                    'hari_keberangkatan' => trim(explode(',', $departDates)[0]),
+                    'jam_keberangkatan' => $value->bill_info22,
+                    'tanggal_kedatangan' => trim(explode('|', $arrivalDates)[1]),
+                    'hari_kedatangan' => trim(explode(',', $arrivalDates)[0]),
+                    'jam_kedatangan' => $value->bill_info23,
+                    'kode_maskapai' => $value->bill_info15,
+                    'nama_maskapai' => Utility::getProductName($apiController, $value->id_produk),
+                    'penumpang' => self::getPassengers($value),
+                    'url_etiket' => 'http://api.fastravel.co.id/app/generate_etiket?id_transaksi=' . $value->id_transaksi,
+                    'url_struk' => 'http://api.fastravel.co.id/app/generate_struk?id_transaksi=' . $value->id_transaksi,
+                    'airlineIcon' => 'https://static.scash.bz/fastravel/assets/images/flighticons/' . substr($value->id_produk, 2, 2)  . '.png',
+                    'subClass' => $value->bill_info66,
+                    'nominal' => $value->nominal,
+                    'nominal_admin' => $value->nominal_admin,
+                    "duration" => Utility::getDurations($value->bill_info11, $value->bill_info12, $value->bill_info22, $value->bill_info23)
+                );
+            
+        }
+        
+        return $result;
+        
+    }
+
+    public static function getDates($strdate,$time)
+    {
+        return preg_replace(Utility::$pattern, Utility::$replace,date("l", strtotime($strdate)) . ",|" . date("d", strtotime($strdate))." ". date("F", strtotime($strdate))." ".date("Y", strtotime($strdate)). " |". $time );
+    }
+    
+    public static function getPassengers($value) 
+    {    
+        $passenger = array();
+
+        foreach (array($value->bill_info34,$value->bill_info35,$value->bill_info36,$value->bill_info37,$value->bill_info38,$value->bill_info39,$value->bill_info40,$value->bill_info41,$value->bill_info42,$value->bill_info43,$value->bill_info44,$value->bill_info45) as $value)
+        {
+            if(!empty($value))
+            {
+                $temporary = explode(";", $value);
+                
+                $passenger[] = array("status" => ($temporary[0] === 'ADT') ? 'DEWASA' : ( ($temporary[0] === 'CHD') ? 'ANAK' : 'BAYI' ), "nama" => $temporary[2] ." ".$temporary[3] , "title" => $temporary[1]);
+            }
+            
+        }
+        
+        return $passenger;
+    }
+
+}

@@ -1,0 +1,12 @@
+<?php
+
+namespace Fastravel\Libraries\Parser;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\BaseMessage;
+
+interface ListResponseParser
+{
+    function parse(BaseMessage $message,APIController $apiController);
+    function into(APIController $apiController);
+}

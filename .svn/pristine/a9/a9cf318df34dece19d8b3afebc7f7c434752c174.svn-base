@@ -1,0 +1,171 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+use Phalcon\Db;
+
+class DataPaymentController extends APIController {
+
+    protected $invoking = "Data Payment Controller";
+
+    public function indexAction() {
+
+        if ($this->request->product === "flight") {
+
+            foreach ($this->db->fetchAll("SELECT * FROM transaksi t WHERE t.id_transaksi = ? UNION SELECT * FROM transaksi_backup tb WHERE tb.id_transaksi = ?", Db::FETCH_OBJ, [$this->request->transactionId, $this->request->transactionId]) as $value) {
+
+                $departDates = self::getDates($value->bill_info13, $value->bill_info22);
+                $arrivalDates = self::getDates($value->bill_info13, $value->bill_info23);
+                $airport = (array) json_decode(Utility::$airport);
+                $this->response->data[] = (object) array(
+                            'id_transaksi' => $value->id_transaksi,
+                            'kode_booking' => ($value->bill_info1 === null) ? '' : $value->bill_info1,
+                            'origin' => $airport[$value->bill_info11]->airportName,
+                            'destination' => $airport[$value->bill_info12]->airportName,
+                            'tanggal_keberangkatan' => trim(explode('|', $departDates)[1]),
+                            'hari_keberangkatan' => trim(explode(',', $departDates)[0]),
+                            'jam_keberangkatan' => $value->bill_info22,
+                            'tanggal_kedatangan' => trim(explode('|', $arrivalDates)[1]),
+                            'hari_kedatangan' => trim(explode(',', $arrivalDates)[0]),
+                            'jam_kedatangan' => $value->bill_info23,
+                            'kode_maskapai' => $value->bill_info15,
+                            'nama_maskapai' => Utility::getProductName($this, $value->id_produk),
+                            'penumpang' => self::getPassengers($value),
+                            'url_etiket' => 'http://api.fastravel.co.id/app/generate_etiket?id_transaksi=' . $value->id_transaksi,
+                            'url_struk' => 'http://api.fastravel.co.id/app/generate_struk?id_transaksi=' . $value->id_transaksi,
+                            'airlineIcon' => 'https://static.scash.bz/fastravel/assets/images/flighticons/' . substr($value->id_produk, 2, 2) . '.png',
+                            'subClass' => $value->bill_info66,
+                            'nominal' => $value->nominal,
+                            'nominal_admin' => $value->nominal_admin,
+                            "duration" => Utility::getDurations($value->bill_info11, $value->bill_info12, $value->bill_info22, $value->bill_info23)
+                );
+            }
+        }
+        else if ($this->request->product === "train") {
+
+            foreach ($this->db->fetchAll("SELECT * FROM transaksi t WHERE t.id_transaksi = ? UNION SELECT * FROM transaksi_backup tb WHERE tb.id_transaksi = ?", Db::FETCH_OBJ, [$this->request->transactionId, $this->request->transactionId]) as $value) {
+
+                $this->response->data[] = (object) array(
+                            "id_transaksi" => $value->id_transaksi,
+                            "kode_booking" => $value->bill_info2,
+                            "origin" => $value->bill_info79,
+                            "destination" => $value->bill_info81,
+                            "tanggal_keberangkatan" => $value->bill_info13,
+                            "hari_keberangkatan" => "",
+                            "jam_keberangkatan" => $value->bill_info80,
+                            "tanggal_kedatangan" => "",
+                            "hari_kedatangan" => "",
+                            "jam_kedatangan" => $value->bill_info82,
+                            "kode_kereta" => $value->bill_info83,
+                            "nama_kereta" => $value->bill_info78,
+                            "classes" => $value->bill_info54,
+                            "penumpang" => self::getPassengerKereta($value),
+                            "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                            "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                );
+            }
+        }
+        else if ($this->request->product === "hotel") {
+
+            foreach ($this->db->fetchAll("SELECT * FROM transaksi t WHERE t.id_transaksi = ? UNION SELECT * FROM transaksi_backup tb WHERE tb.id_transaksi = ?", Db::FETCH_OBJ, [$this->request->transactionId, $this->request->transactionId]) as $value) {
+
+                $this->response->data[] = (object) array(
+                            "id_transaksi" => $value->id_transaksi,
+                            "kode_booking" => $value->bill_info2,
+                            "nama_hotel" => $value->hotel_name,
+                            "room_type" => $value->bill_info15,
+                            "pax" => $value->bill_info6,
+                            "check_in" => $value->bill_info33,
+                            "check_out" => $value->bill_info34,
+                            "tamu" => $this->getGuestHotel($value),
+                            "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi . "&id_outlet=" . $value->id_outlet,
+                            "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi,
+                            "duration" => $value->bill_info35 . " malam"
+                );
+            }
+        }
+        else if ($this->request->product === "ship") {            
+            foreach ($this->db->fetchAll("SELECT * FROM transaksi t WHERE t.id_transaksi = ? UNION SELECT * FROM transaksi_backup tb WHERE tb.id_transaksi = ?", Db::FETCH_OBJ, [$this->request->transactionId, $this->request->transactionId]) as $value) {
+                $data_kapal = json_decode($value->bill_info70);
+                $this->response->data[] = (object) array(
+                            "id_transaksi" => $value->id_transaksi,
+                            "kode_booking" => $value->bill_info1,
+                            "nama_kapal" => $data_kapal->data_ship_name,
+                            "origin" => $data_kapal->data_pelabuhan_asal,
+                            "destination" => $data_kapal->data_pelabuhan_tujuan,
+                            "tanggal_keberangkatan" => $value->bill_info24,
+                            "hari_keberangkatan" => $this->getDay($value->bill_info24),
+                            "jam_keberangkatan" => substr($value->bill_info30, 0, 2) . ":" . substr($value->bill_info30, 2, 2),
+                            "tanggal_kedatangan" => $value->bill_info29,
+                            "hari_kedatangan" => $this->getDay($value->bill_info29),
+                            "subClass" => $value->bill_info16,
+                            "jam_kedatangan" => substr($value->bill_info31, 0, 2) . ":" . substr($value->bill_info31, 2, 2),
+                            "penumpang" => $this->getPassengerKapal($value),
+                            "url_etiket" => "http://api.fastravel.co.id/app/generate_etiket?id_transaksi=" . $value->id_transaksi,
+                            "url_struk" => "http://api.fastravel.co.id/app/generate_struk?id_transaksi=" . $value->id_transaksi
+                );
+            }
+        }
+    }
+
+    public static function getDates($strdate, $time) {
+        return preg_replace(Utility::$pattern, Utility::$replace, date("l", strtotime($strdate)) . ",|" . date("d", strtotime($strdate)) . " " . date("F", strtotime($strdate)) . " " . date("Y", strtotime($strdate)) . " |" . $time);
+    }
+
+    public static function getPassengers($value) {
+        $passenger = array();
+        foreach (array($value->bill_info34, $value->bill_info35, $value->bill_info36, $value->bill_info37, $value->bill_info38, $value->bill_info39, $value->bill_info40, $value->bill_info41, $value->bill_info42, $value->bill_info43, $value->bill_info44, $value->bill_info45) as $value) {
+            if (!empty($value)) {
+                $temporary = explode(";", $value);
+                $passenger[] = array("status" => ($temporary[0] === 'ADT') ? 'DEWASA' : ( ($temporary[0] === 'CHD') ? 'ANAK' : 'BAYI' ), "nama" => $temporary[2] . " " . $temporary[3], "title" => $temporary[1]);
+            }
+        }
+        return $passenger;
+    }
+
+    public static function getPassengerKereta($value) {
+        $penumpang = array();
+        $list_penumpang = array($value->bill_info20,
+            $value->bill_info24,
+            $value->bill_info28,
+            $value->bill_info32
+        );
+        for ($i = 0; $i <= 3; $i++) {
+            if (!$list_penumpang[$i]) {
+                break;
+            }
+
+            $penumpang[$i] = array("nama" => $list_penumpang[$i]);
+        }
+        return $penumpang;
+    }
+
+    //hotel
+    public function getGuestHotel($value) {
+        $guest = array();
+        $guest [0] = array(
+            "nama depan" => $value->bill_info41,
+            "nama akhir" => $value->bill_info42
+        );
+
+        return $guest;
+    }
+    //kapal
+    public function getDay($strdate){
+        $timestamp = strtotime($strdate);
+        return preg_replace(Utility::getPattern(),Utility::getReplace(),date("l", $timestamp));
+    }
+    public function getPassengerKapal($value) {
+        $penumpang = array();
+        //75
+        $list_penumpang  = explode("|", $value->bill_info75);
+        for ($i=0;$i <= 3;$i++){
+            if(!$list_penumpang[$i])
+            break;
+        $penumpang[$i] = array("nama" => $list_penumpang[$i]);
+        }
+        return $penumpang;
+    }
+}

@@ -1,0 +1,49 @@
+<?php
+
+namespace Fastravel\Flight;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\FlightMessage;
+use Fastravel\Libraries\Parser\Flight\SearchResponseParser;
+use Fastravel\Libraries\MTI;
+use DateTime;
+
+class SearchController extends APIController
+{
+    protected $invoking = "Search Flight";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::RESERVATION);
+        $this->setProductCode($this->request->airline);
+        
+        $message = new FlightMessage($this);
+        
+        $message->set(FlightMessage::FIELD_FLIGHT_STEP, "AVAIL");
+        $message->set(FlightMessage::FIELD_INDEX, date("YmdHis"));
+        $message->set(FlightMessage::FIELD_MASKAPAI, $this->request->airline);
+        $message->set(FlightMessage::FIELD_RUTE, 0);
+        
+        $departureDate = DateTime::createFromFormat('Y-m-d', $this->request->departureDate);
+        
+        $message->set(FlightMessage::FIELD_CITY_ORIGIN, $this->request->departure);
+        $message->set(FlightMessage::FIELD_CITY_DESTINATION, $this->request->arrival);
+        $message->set(FlightMessage::FIELD_DATE_DEPARTURE, $departureDate->format('m/d/Y'));
+        $message->set(FlightMessage::FIELD_DATE_ARRIVAL, $departureDate->format('m/d/Y'));
+        $message->set(FlightMessage::FIELD_COUNT_ADULT, $this->request->adult);
+        $message->set(FlightMessage::FIELD_COUNT_CHILD, $this->request->child);
+        $message->set(FlightMessage::FIELD_COUNT_BABY, $this->request->infant);
+        
+        $message->set(FlightMessage::FIELD_PROCESS, "01");
+        
+        $this->sendToCore($message);
+        
+        if($message->get(FlightMessage::FIELD_CITY_ORIGIN)==="KNO" && $message->get(FlightMessage::FIELD_CITY_DESTINATION)==="TKG"){
+            error_log("responseGA : ".$message->toString());
+        }
+        
+        SearchResponseParser::instance()->parse($message)->into($this);
+        
+        
+    }
+}

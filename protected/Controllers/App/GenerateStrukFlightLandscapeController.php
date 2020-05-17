@@ -1,0 +1,33 @@
+<?php
+
+namespace Travel\App;
+
+use Phalcon\Http\Request;
+use Phalcon\Mvc\Controller;
+use Travel\Libraries\ProductCode;
+use Phalcon\Db;
+use Travel\Libraries\Models\Outlet;
+
+class GenerateStrukFlightLandscapeController extends Controller
+{
+
+    protected $invoking = "Generate Struk Flight Landscape App"; // Generate Html
+
+    public function indexAction()
+    {
+
+        $request = new Request();
+
+        $id_transaksi = $request->get("id_transaksi");
+
+        $product = $this->db->query("select * from transaksi where id_transaksi = ? UNION select * from transaksi_backup where transaksi_backup.id_transaksi = ? ", [$id_transaksi, $id_transaksi]);
+
+        $product->setFetchMode(Db::FETCH_OBJ);
+
+        $source = "http://10.0.0.2/pdfgen/fastflight_landscape_receiver.php?id_transaksi=" . $id_transaksi;
+        header("Content-type: application/pdf");
+        header('Content-Disposition: attachment; filename="' . $id_transaksi . '.pdf"');
+        $file = file_get_contents($source);
+        echo $file;
+    }
+}

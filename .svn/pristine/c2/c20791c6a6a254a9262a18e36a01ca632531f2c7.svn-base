@@ -1,0 +1,23 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Tour;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\TourMessage;
+use Fastravel\Libraries\APIController;
+
+class DetailPriceResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Tour message response from core.
+     * 
+     * @var TourMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        
+    }
+}

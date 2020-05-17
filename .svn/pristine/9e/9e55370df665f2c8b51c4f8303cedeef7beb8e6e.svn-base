@@ -1,0 +1,54 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Hotel;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+
+class BookResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Hotel Message.
+     * 
+     * @var HotelMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(HotelMessage::FIELD_STATUS);
+        $rd = $this->message->get(HotelMessage::FIELD_KETERANGAN);
+        $apiController->response->setDataAsObject();
+        
+        if($rc == "00")
+        {
+            $apiController->response->data->bookingCode = $this->message->get(HotelMessage::FIELD_RESNO);
+            $apiController->response->data->normalSales = $this->message->get(HotelMessage::FIELD_BOOKING_PRICE);
+            $apiController->response->data->mid = $this->message->get(HotelMessage::FIELD_MID);
+            $apiController->response->data->transactionId = $this->message->get(HotelMessage::FIELD_TRX_ID);
+            $apiController->response->data->hotel = json_decode(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $this->message->get(HotelMessage::FIELD_HOTEL_DATA)));
+            $apiController->response->data->komisi = Utility::getKomisi($apiController,$this->message->get(HotelMessage::FIELD_TRX_ID));
+            $apiController->response->data->timeLimit = $this->getTimeLimit();
+	    $apiController->response->data->hotelId = $this->message->get(HotelMessage::FIELD_HOTEL_ID);
+        }else if($rc == "211"){
+            $rd = "Maaf, Kamar yang Anda pesan sedang tidak tersedia / telah habis terpesan.";
+        }
+        
+        $apiController->response->mid = $this->message->get(HotelMessage::FIELD_MID);
+        $apiController->response->setStatus($rc, $rc == "00" ? "Sukses" : $rd);
+    }
+    
+    public function getTimeLimit()
+    {
+        /* @ 2 jam setelah Booking */
+        
+        $timestamp = strtotime(date('Y-m-d H:i:s')) + 60 * 60 * 2;
+
+        $time = date('Y-m-d H:i:s', $timestamp);
+
+        return $time;
+    }
+}

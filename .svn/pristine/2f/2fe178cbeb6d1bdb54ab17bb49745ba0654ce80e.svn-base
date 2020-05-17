@@ -1,0 +1,60 @@
+<?php
+
+namespace Fastravel\Train;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\Parser\Train\PaymentResponseParser;
+use Fastravel\Libraries\Utility;
+use Fastravel\Libraries\MTI;
+
+use Phalcon\Db;
+
+class PaymentController extends APIController
+{
+    protected $invoking = "Payment Train";
+    
+    public function indexAction()
+    {
+        $this->setMTI(MTI::NKAIPAY);
+        $this->setProductCode($this->request->productCode);
+        
+        $message = new TrainMessage($this);
+        
+        $transaksi = $this->db->query("SELECT nominal,nominal_admin,bill_info14 AS discount FROM transaksi WHERE id_produk IN ('WKAI','TKAI') AND bill_info2 = ? ORDER BY time_request LIMIT 1", [$this->request->bookingCode]);
+        $transaksi->setFetchMode(Db::FETCH_OBJ);
+        $data = $transaksi->fetch();
+        $nominal = intval($data->nominal);
+        $nominal_admin = intval($data->nominal_admin);
+        $discount = intval($data->discount);
+        
+        $message->set(TrainMessage::FIELD_ID_PEL2, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_NOMINAL,$nominal);
+        $message->set(TrainMessage::FIELD_NOMINAL_ADMIN,$nominal_admin);
+        
+        $message->set(TrainMessage::FIELD_LOKET_ID,$this->getOutletId());
+        $message->set(TrainMessage::FIELD_PIN,$this->getPin());
+        $message->set(TrainMessage::FIELD_TOKEN,$this->getKey());
+        
+        $message->set(TrainMessage::FIELD_TRX_ID,$this->request->transactionId);
+        
+        $message->set(TrainMessage::FIELD_BOOK_CODE, $this->request->bookingCode);
+        $message->set(TrainMessage::FIELD_NORMAL_SALES, $nominal);
+        $message->set(TrainMessage::FIELD_EXTRA_FEE, $nominal_admin);
+        $message->set(TrainMessage::FIELD_PAY_TYPE, $this->request->pay_type);
+        $message->set(TrainMessage::FIELD_REVENUE, $nominal);
+        $message->set(TrainMessage::FIELD_SEAT_MAP_NULL, $discount);
+        $message->set(TrainMessage::FIELD_REFUND, $discount);
+        //$message->set(TrainMessage::, $value)
+
+//        if(!Utility::isTesterOutlet($this->getOutletId())){
+        if(!isset($this->request->simulateSuccess) || $this->request->simulateSuccess == false){
+            $this->sendToCore($message);
+        }
+            
+//        }
+        //$message->parse('NKAIPAY*WKAI*1980153868*2*20170821070501*WEB**WESL63**80000*7082*FA30880*------*------*****792054254*********7892048869**EKO_AC***************************************WESL63**80000*7082**-7500*******************0*UBP_MANDIRI*0*TUNAI****80000*********');
+        
+        PaymentResponseParser::instance()->parse($message)->into($this);
+    }
+}

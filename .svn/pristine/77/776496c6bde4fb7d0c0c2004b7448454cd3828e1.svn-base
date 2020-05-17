@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\RequestKeyResponseParser;
+
+class RequestKeyController extends APIController
+{
+    protected $invoking = "Request Key App";
+    
+    public function indexAction()
+    {
+        $message = new AppMessage($this);
+        
+        RequestKeyResponseParser::instance()->parse($message)->into($this);
+    }
+}

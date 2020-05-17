@@ -1,0 +1,180 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Wisata;
+
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\WisataMessage;
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Utility;
+use Phalcon\Db;
+
+class DetailResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * TravelBus message response from core.
+     * 
+     * @var WisataMessage
+     */
+    protected $message;
+    protected $url_foto = "http://best.fastravel.co.id/";
+    protected $bb_url_foto = "https://static.scash.bz/jadipergi/img/wisata/";
+    
+    public function into(APIController $apiController)
+    {
+        $upPrice = $apiController->db->query("select nilai from global_setting where kunci =?",['setting_up_harga_paket_wisata_jadipergi'])->fetch()['nilai'];
+        
+        $detail = $apiController->db->query("select * from paket_wisata_2_mt_destinasi where id_destinasi=?",[$apiController->request->idDestination])->fetch();
+        
+        $photos = array();
+        
+        $Photos = $apiController->db->query("select * from paket_wisata_2_foto_destinasi where id_destinasi=? order by urutan asc",[$apiController->request->idDestination])->fetchAll();
+        
+        foreach ($Photos as $value)
+        {
+            if (intval($value['use_cdn']) === 1) 
+            {
+                array_push($photos, $this->bb_url_foto . $value['path_foto']);
+            } 
+            else if (intval($value['use_cdn']) === 0)
+            {
+                array_push($photos, $this->url_foto . $value['path_foto']);
+            } 
+            else if ($value['use_cdn'] == -1) 
+            {
+                //nothing...
+            } 
+        }
+        
+        $price = $apiController->db->query("select custom_harga_1 + (custom_harga_1::float / 100::float * ?)::int as custom_harga_1,
+                custom_harga_2 + (custom_harga_2::float / 100::float * ?)::int as custom_harga_2,
+                custom_harga_3 + (custom_harga_3::float / 100::float * ?)::int as custom_harga_3,
+                custom_harga_4 + (custom_harga_4::float / 100::float * ?)::int as custom_harga_4,
+                custom_harga_5 + (custom_harga_5::float / 100::float * ?)::int as custom_harga_5,
+                custom_harga_6 + (custom_harga_6::float / 100::float * ?)::int as custom_harga_6,
+                custom_harga_7 + (custom_harga_7::float / 100::float * ?)::int as custom_harga_7,
+                custom_harga_8 + (custom_harga_8::float / 100::float * ?)::int as custom_harga_8               
+                from paket_wisata_2_harga_paket where tanggal::date > now()::date and status = 1 and id_destinasi = ? order by tanggal asc",
+                [$upPrice,$upPrice,$upPrice,$upPrice,$upPrice,$upPrice,$upPrice,$upPrice,$apiController->request->idDestination])->fetchAll();
+        
+        $typeWisata = $apiController->db->query("select m.nama_tipe_wisata from paket_wisata_2_data_tipe_wisata t
+                left join  paket_wisata_2_mt_tipe_wisata m on(t.id_tipe_wisata=m.id_tipe_wisata)
+                where t.id_destinasi=?",[$apiController->request->idDestination])->fetchAll();
+        
+        $facilities = $apiController->db->query("select m.nama_fasilitas from paket_wisata_2_fasilitas_include t
+                left join  paket_wisata_2_mt_fasilitas m on(t.id_fasilitas=m.id_fasilitas)
+                where t.id_destinasi=?",[$apiController->request->idDestination])->fetchAll();
+        
+        $object = $apiController->db->query("select nama_objek_wisata from paket_wisata_2_objek_wisata
+                where id_destinasi=? limit 12",[$apiController->request->idDestination])->fetchAll();
+        
+        $facilitiesExclude = $apiController->db->query("select * from paket_wisata_2_mt_fasilitas
+                where id_fasilitas in(select id_fasilitas from paket_wisata_2_fasilitas_exclude where id_destinasi=?)",
+                [$apiController->request->idDestination])->fetchAll();
+        
+        $iteneraryQuery = $apiController->db->query("select nama_itinerary as title,detail_itinerary as content from paket_wisata_2_data_itinerary where id_destinasi=? order by urutan asc", [$apiController->request->idDestination]);
+        $iteneraryQuery->setFetchMode(Db::FETCH_OBJ);
+        
+        $priceList = $apiController->db->query("select custom_harga_1 + (custom_harga_1::float / 100::float * ?)::int as custom_harga_1,
+                custom_harga_2 + (custom_harga_2::float / 100::float * ?)::int as custom_harga_2,
+                custom_harga_3 + (custom_harga_3::float / 100::float * ?)::int as custom_harga_3,
+                custom_harga_4 + (custom_harga_4::float / 100::float * ?)::int as custom_harga_4,
+                custom_harga_5 + (custom_harga_5::float / 100::float * ?)::int as custom_harga_5,
+                custom_harga_6 + (custom_harga_6::float / 100::float * ?)::int as custom_harga_6,
+                custom_harga_7 + (custom_harga_7::float / 100::float * ?)::int as custom_harga_7,
+                custom_harga_8 + (custom_harga_8::float / 100::float * ?)::int as custom_harga_8,
+                custom_harga_9 + (custom_harga_9::float / 100::float * ?)::int as custom_harga_9,
+                custom_harga_10 + (custom_harga_10::float / 100::float * ?)::int as custom_harga_10,
+                id_harga_paket,id_destinasi,tanggal,quota,status,rate_hotel
+                from paket_wisata_2_harga_paket where id_destinasi = ? and status=1 and tanggal::date > (now() + interval '5 days')::date order by tanggal asc",
+                [$upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $upPrice, $apiController->request->idDestination]);
+        $priceList->setFetchMode(Db::FETCH_OBJ);
+        
+        $arrayPrice = array();
+        foreach ($price as $value) {
+            array_push($arrayPrice, $value['custom_harga_1']); // 1 orang
+            array_push($arrayPrice, $value['custom_harga_2']); // 2 orang
+            array_push($arrayPrice, $value['custom_harga_3']); // 3 - 4 
+            array_push($arrayPrice, $value['custom_harga_4']); // 5 - 6
+            array_push($arrayPrice, $value['custom_harga_5']); // 7 - 10
+            array_push($arrayPrice, $value['custom_harga_6']); // 11 - 16
+            array_push($arrayPrice, $value['custom_harga_7']); // 17 - 24
+            array_push($arrayPrice, $value['custom_harga_8']); // 25 - 44
+        }
+        
+        $arrayType = array();
+        foreach ($typeWisata as $value) {
+            array_push($arrayType, $value['nama_tipe_wisata']);
+        }
+        
+        $arrayFacilities = array();
+        foreach ($facilities as $value) {
+            array_push($arrayFacilities, $value['nama_fasilitas']);
+        }
+        
+        $arrayObject = array();
+        foreach ($object as $value) {
+            array_push($arrayObject, $value['nama_objek_wisata']);
+        }
+        
+        $arrayFacilitiesExclude = array();
+        foreach ($facilitiesExclude as $value) {
+            array_push($arrayFacilitiesExclude, $value['nama_fasilitas']);
+        }
+        
+        $tourType = (intval($detail['is_open_trip']) === 1 ) ? 'OPEN_TRIP' : 'SCHEDULE_TRIP';
+        $priceUnit =  ($detail['mata_uang'] === 'IDR') ? 'Harga dalam rupiah (IDR) / pax' : 'Harga dalam ' . $detail['mata_uang'] . ' / pax';
+        
+        $listPrice = $priceList->fetchAll();
+        
+        $response = array(
+            "destinationId" => $apiController->request->idDestination,
+            "photos" => $photos,
+            "title" => $detail['nama_destinasi'],
+            "id_propinsi"=>$detail['id_propinsi'],
+            "price" => min(array_filter($arrayPrice)),
+            "tourType" => $arrayType,
+            "facilities" => $arrayFacilities,
+            "tourObjects" => $arrayObject,
+            "excludedFacilities" => $arrayFacilitiesExclude,
+            "tourType" => $tourType,
+            "currency" => ($detail['mata_uang'] === 'IDR') ? "Rp" : $detail['mata_uang'],
+            "unit" => 'pax',
+            "paxList" => Utility::getRangePax($listPrice),
+            "listPrice" => Utility::getListPrice($listPrice[0]),
+            "itenerary" => $iteneraryQuery->fetch(),
+            "iteneraryUrl"=> "http://api.fastravel.co.id/wisata/itenerary?id_destinasi=" . $apiController->request->idDestination,
+            "priceUnit" => $priceUnit,
+            "prices" => $listPrice
+        );
+        
+        if(count($priceList) > 0)
+        {    
+            $apiController->response->data = $response;   
+        }
+        else
+        {
+            $apiController->response->setStatus("01", "Detail is empty.");
+        }
+        
+    }
+    
+    function construct_array_harga($data) {
+        $arr_daftar_harga = array(
+            array("harga" => $data['custom_harga_1'], "range_min" => "1", "range_max" => "1", "key" => "custom_harga_1"),
+            array("harga" => $data['custom_harga_2'], "range_min" => "2", "range_max" => "2", "key" => "custom_harga_2"),
+            array("harga" => $data['custom_harga_3'], "range_min" => "3", "range_max" => "4", "key" => "custom_harga_3"),
+            array("harga" => $data['custom_harga_4'], "range_min" => "5", "range_max" => "6", "key" => "custom_harga_4"),
+            array("harga" => $data['custom_harga_5'], "range_min" => "7", "range_max" => "10", "key" => "custom_harga_5"),
+            array("harga" => $data['custom_harga_6'], "range_min" => "11", "range_max" => "15", "key" => "custom_harga_6"),
+            array("harga" => $data['custom_harga_7'], "range_min" => "16", "range_max" => "24", "key" => "custom_harga_7"),
+            array("harga" => $data['custom_harga_8'], "range_min" => "25", "range_max" => "44", "key" => "custom_harga_8")
+        );
+        $harga_by_tanggal = array(
+            'tanggal' => $data['tanggal'],
+            'harga' => $arr_daftar_harga
+        );
+        return $harga_by_tanggal;
+    }
+    
+}

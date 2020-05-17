@@ -1,0 +1,43 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Hotel;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\HotelMessage;
+use Fastravel\Libraries\APIController;
+
+class SearchResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Hotel Message.
+     * 
+     * @var HotelMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(HotelMessage::FIELD_STATUS);
+        $rd = $this->message->get(HotelMessage::FIELD_KETERANGAN);
+        
+        if($rc == "00")
+        {
+            $data = json_decode($this->message->get(HotelMessage::FIELD_HOTEL_DATA));
+            
+            //$apiController->response->data = $data->hotel;
+            
+            $ret = $data->hotel;
+            
+            usort($ret, function ($a,$b) 
+            {
+              return ($a->roomCateg[0]->roomType->totalPrice <= $b->roomCateg[0]->roomType->totalPrice) ? -1 : 1;
+            });
+            
+            $apiController->response->data = $ret;
+            
+        }
+        
+        $apiController->response->setStatus($rc, $rc == "00" ? "Sukses" : $rd);
+    }
+}

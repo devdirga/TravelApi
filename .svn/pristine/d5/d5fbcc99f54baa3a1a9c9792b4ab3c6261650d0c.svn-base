@@ -1,0 +1,19 @@
+<?php
+
+namespace Fastravel\App;
+
+use Fastravel\Libraries\APIController;
+use Fastravel\Libraries\Message\AppMessage;
+use Fastravel\Libraries\Parser\App\ListBaggageResponseParser;
+
+class ListBaggageController extends APIController
+{
+    protected $invoking = "Baggage List App";
+    
+    public function indexAction()
+    {
+        $message = new AppMessage($this);
+        
+        ListBaggageResponseParser::instance()->parse($message)->into($this);
+    }
+}

@@ -1,0 +1,33 @@
+<?php
+
+namespace Fastravel\Libraries\Parser\Train;
+
+use Fastravel\Libraries\Parser\BaseResponseParser;
+use Fastravel\Libraries\Parser\ResponseParser;
+use Fastravel\Libraries\Message\TrainMessage;
+use Fastravel\Libraries\APIController;
+
+class FareResponseParser extends BaseResponseParser implements ResponseParser
+{
+    /**
+     * Train message response from core.
+     * 
+     * @var TrainMessage
+     */
+    protected $message;
+    
+    public function into(APIController $apiController)
+    {
+        $rc = $this->message->get(TrainMessage::FIELD_ERR_CODE);
+        $rd = $this->message->get(TrainMessage::FIELD_ERR_MSG);
+        
+        if($rc == "00")
+        {
+            $apiController->response->setDataAsObject();
+            
+            $apiController->response->data->nominalAdmin = $this->message->get(TrainMessage::FIELD_NOMINAL_ADMIN);
+        }
+        
+        $apiController->response->setStatus($rc == "0" ? "00" : $rc, $rc == "00" ? "Success" : $rd);
+    }
+}
